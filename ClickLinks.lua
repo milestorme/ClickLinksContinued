@@ -3,7 +3,7 @@
 -- Original Author: tannerng
 -- Updated by : Milestorme
 -- Description: Makes URLs clickable
--- Version: 1.0.10 (Fully fixed for Classic 1.15.8 and Retail 11.2.7)
+-- Version: 1.0.10 (Fully fixed for Classic 1.15.8, MoP 5.5.3 and Retail 11.2.7)
 
 URL_PATTERNS = {
     -- X://Y most urls
@@ -116,3 +116,4 @@ local CHAT_TYPES = {
 for _, chatType in pairs(CHAT_TYPES) do
     ChatFrame_AddMessageEventFilter("CHAT_MSG_" .. chatType, makeClickable)
 end
+
