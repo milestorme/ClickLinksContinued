@@ -1,9 +1,11 @@
-## Interface: 11306
+## Interface-Retail: 110207
+## Interface-MoP: 50503
+## Interface-Classic: 11508
 ## Title: ClickLinks
 ## Original Author: tannerng
 ## Updated by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 1.0.14
+## Version: 1.0.16
 ClickLinks.lua
 
 
