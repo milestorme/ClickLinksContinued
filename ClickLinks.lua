@@ -42,7 +42,7 @@ function formatURL(url)
 end
 
 -------------------------------------------------
--- FIX #1: Proper gsub capture handling
+-- Proper gsub capture handling
 -------------------------------------------------
 function makeClickable(self, event, msg, ...)
     for _, p in pairs(URL_PATTERNS) do
@@ -55,7 +55,7 @@ end
 -------------------------------------------------
 
 -------------------------------------------------
--- FIX #2 + #3: Classic StaticPopup handling
+-- StaticPopup handling
 -------------------------------------------------
 StaticPopupDialogs["CLICK_LINK_CLICKURL"] = {
     text = "Copy & Paste the link into your browser",
