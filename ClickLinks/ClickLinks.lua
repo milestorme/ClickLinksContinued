@@ -151,7 +151,9 @@ f:SetScript("OnEvent", function(_, event, prefix, message)
         if IsInGroup() then
             C_ChatInfo.SendAddonMessage(PREFIX, localVersion, "PARTY")
         end
-
+		if IsInRaid() then
+			C_ChatInfo.SendAddonMessage(PREFIX, localVersion, "RAID")
+		end
     elseif event == "CHAT_MSG_ADDON" and prefix == PREFIX then
         local remoteVerNum = VersionToNumber(message)
         if remoteVerNum > localVerNum and not ClickLinksDB.warned then
