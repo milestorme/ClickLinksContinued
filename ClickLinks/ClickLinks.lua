@@ -5,7 +5,10 @@
 -- Description: Makes URLs clickable + automatic version checking
 -- Version: 1.0.19
 
-URL_PATTERNS = {
+-------------------------------------------------
+-- URL Patterns
+-------------------------------------------------
+local URL_PATTERNS = {
     -- X://Y most urls
     "^(%a[%w+.-]+://%S+)",
     "%f[%S](%a[%w+.-]+://%S+)",
@@ -15,7 +18,7 @@ URL_PATTERNS = {
     -- www.X.Y domain
     "^(www%.[-%w_%%]+%.(%a%a+))",
     "%f[%S](www%.[-%w_%%]+%.(%a%a+))",
-    -- emaild
+    -- email
     "(%S+@[%w_.-%%]+%.(%a%a+))",
     -- ip address with port and path
     "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d/%S+)",
@@ -35,13 +38,28 @@ local function formatURL(url)
     return "|cff149bfd|Hurl:" .. url .. "|h[" .. url .. "]|h|r "
 end
 
+-------------------------------------------------
+-- Chat message filter
+-------------------------------------------------
 local function makeClickable(self, event, msg, ...)
-    for _, pattern in pairs(URL_PATTERNS) do
-        msg = msg:gsub(pattern, function(url)
-            return formatURL(url)
-        end)
+    -- Quick pre-check to avoid unnecessary gsub
+    if not msg:find("://") and not msg:find("www.") and not msg:find("@") then
+        return false, msg, ...
+    end
+    for _, pattern in ipairs(URL_PATTERNS) do
+        msg = msg:gsub(pattern, formatURL)
     end
     return false, msg, ...
+end
+
+local CHAT_TYPES = {
+    "AFK","BATTLEGROUND_LEADER","BATTLEGROUND","BN_WHISPER","BN_WHISPER_INFORM",
+    "CHANNEL","COMMUNITIES_CHANNEL","DND","EMOTE","GUILD","OFFICER","PARTY_LEADER",
+    "PARTY","RAID_LEADER","RAID_WARNING","RAID","SAY","WHISPER","WHISPER_INFORM","YELL","SYSTEM"
+}
+
+for _, chatType in ipairs(CHAT_TYPES) do
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_" .. chatType, makeClickable)
 end
 
 -------------------------------------------------
@@ -69,44 +87,11 @@ StaticPopupDialogs["CLICK_LINK_CLICKURL"] = {
 
 local OriginalSetHyperlink = ItemRefTooltip.SetHyperlink
 function ItemRefTooltip:SetHyperlink(link)
-    if link:sub(1, 3) == "url" then
-        StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, {
-            url = link:sub(5)
-        })
+    if link:match("^url:") then
+        StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = link:sub(5) })
     else
         OriginalSetHyperlink(self, link)
     end
-end
-
--------------------------------------------------
--- Chat Filters
--------------------------------------------------
-local CHAT_TYPES = {
-    "AFK",
-    "BATTLEGROUND_LEADER",
-    "BATTLEGROUND",
-    "BN_WHISPER",
-    "BN_WHISPER_INFORM",
-    "CHANNEL",
-    "COMMUNITIES_CHANNEL",
-    "DND",
-    "EMOTE",
-    "GUILD",
-    "OFFICER",
-    "PARTY_LEADER",
-    "PARTY",
-    "RAID_LEADER",
-    "RAID_WARNING",
-    "RAID",
-    "SAY",
-    "WHISPER",
-    "WHISPER_INFORM",
-    "YELL",
-    "SYSTEM"
-}
-
-for _, chatType in pairs(CHAT_TYPES) do
-    ChatFrame_AddMessageEventFilter("CHAT_MSG_" .. chatType, makeClickable)
 end
 
 -------------------------------------------------
@@ -115,9 +100,7 @@ end
 local ADDON_NAME = ...
 local PREFIX = "CLICKLINKS_VER"
 
-ClickLinksDB = ClickLinksDB or {
-    warned = false,
-}
+ClickLinksDB = ClickLinksDB or { warned = false }
 
 local L = {
     ADDON_NAME = "Click Links",
@@ -142,9 +125,8 @@ C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("CHAT_MSG_ADDON")
-f:RegisterEvent("GROUP_ROSTER_UPDATE") -- detect group/raid changes
+f:RegisterEvent("GROUP_ROSTER_UPDATE")
 
--- Track whether we already sent version to current group/raid
 local sentVersionThisGroup = false
 
 local function SendVersionToGroup()
@@ -152,10 +134,8 @@ local function SendVersionToGroup()
         C_ChatInfo.SendAddonMessage(PREFIX, localVersion, "GUILD")
     end
     if IsInRaid() or IsInGroup() then
-        -- Only send once per group/raid session
         if not sentVersionThisGroup then
             local channel = IsInRaid() and "RAID" or "PARTY"
-            -- Only players with the addon will receive this
             C_ChatInfo.SendAddonMessage(PREFIX, localVersion, channel)
             sentVersionThisGroup = true
         end
@@ -166,14 +146,12 @@ f:SetScript("OnEvent", function(_, event, prefix, message)
     if event == "PLAYER_LOGIN" then
         SendVersionToGroup()
     elseif event == "GROUP_ROSTER_UPDATE" then
-        -- Reset flag if you left the group/raid
         if not IsInGroup() and not IsInRaid() then
             sentVersionThisGroup = false
         else
             SendVersionToGroup()
         end
     elseif event == "CHAT_MSG_ADDON" and prefix == PREFIX then
-        -- Only process messages from players who have the addon (prefix ensures that)
         local remoteVerNum = VersionToNumber(message)
         if remoteVerNum > localVerNum and not ClickLinksDB.warned then
             ClickLinksDB.warned = true
@@ -184,7 +162,6 @@ f:SetScript("OnEvent", function(_, event, prefix, message)
         end
     end
 end)
-
 
 -------------------------------------------------
 -- Slash Commands
