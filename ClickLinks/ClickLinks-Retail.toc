@@ -1,6 +1,4 @@
-## Interface-Retail: 110207
-## Interface-MoP: 50503
-## Interface-Classic: 11508
+## Interface: 110207
 ## Title: ClickLinks
 ## Original Author: tannerng
 ## Continued by: Milestorme
