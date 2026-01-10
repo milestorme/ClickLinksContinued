@@ -3,7 +3,6 @@
 -- Original Author: tannerng
 -- Continued by : Milestorme
 -- Description: Makes URLs clickable + automatic version checking
--- Version: 1.1.0
 -- notes: Adds clickable URL links to chat, plus in-game version announcement + one-time update warning.
 
 -------------------------------------------------
@@ -66,6 +65,9 @@ local URL_PATTERNS = {
 local function formatURL(url)
     -- notes: Converts a raw URL string into a colored clickable hyperlink using the "url:" hyperlink type.
     -- notes: The ItemRefTooltip:SetHyperlink hook below intercepts "url:" to show the copy popup.
+    -- notes: Escape "|" because it is a control character in WoW hyperlink formatting.
+    url = tostring(url or "")
+    url = url:gsub("%|", "||")
     return "|cff149bfd|Hurl:" .. url .. "|h[" .. url .. "]|h|r "
 end
 
@@ -76,10 +78,24 @@ local function makeClickable(self, event, msg, ...)
     -- notes: ChatFrame_AddMessageEventFilter callback.
     -- notes: Performs a cheap pre-check, then gsubs all URL patterns into clickable links.
     -- notes: Returns (false, msg, ...) so the message continues through normal rendering.
-    -- Quick pre-check to avoid unnecessary gsub
-    if not msg:find("://") and not msg:find("www.") and not msg:find("@") then
+
+    -- If the line already contains hyperlinks (items/spells/etc), don't touch it.
+    -- This avoids edge-case corruption and plays nicer with other chat addons.
+    if msg and msg:find("|H") then
         return false, msg, ...
     end
+
+    -- Quick pre-check to avoid unnecessary gsub
+    -- Note: include IP-only links like 123.45.67.89:28015 which don't contain "://", "www.", or "@".
+    if not msg
+        or (not msg:find("://")
+            and not msg:find("www%.")
+            and not msg:find("@")
+            and not msg:find("%d+%.%d+%.%d+%.%d+"))
+    then
+        return false, msg, ...
+    end
+
     for _, pattern in ipairs(URL_PATTERNS) do
         msg = msg:gsub(pattern, formatURL)
     end
@@ -154,7 +170,7 @@ local L = {
 }
 
 -- notes: Reads the addon Version field from the TOC metadata.
-local localVersion = C_AddOns.GetAddOnMetadata(ADDON_NAME, "Version") or "0"
+local localVersion = ((C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata)(ADDON_NAME, "Version") or "0"
 
 local function VersionToNumber(ver)
     -- notes: Converts semantic X.Y.Z into an integer so versions can be compared numerically.

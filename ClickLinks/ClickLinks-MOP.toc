@@ -3,7 +3,8 @@
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 1.1.0
+## Version: 1.1.2
+## SavedVariables: ClickLinksDB
 ClickLinks.lua
 
 
