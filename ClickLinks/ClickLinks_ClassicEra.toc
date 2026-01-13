@@ -3,7 +3,7 @@
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 1.1.4
+## Version: 1.1.5
 ## SavedVariables: ClickLinksDB
 Libs/LibStub/LibStub.lua
 Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua

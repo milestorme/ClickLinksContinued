@@ -125,7 +125,9 @@ end
 -------------------------------------------------
 -- notes: Some messages (guild MOTD, addon prints, certain system lines) are written directly via ChatFrame:AddMessage
 -- notes: and do NOT go through CHAT_MSG_* filters. We wrap AddMessage to catch those too.
+local HookCommunitiesFramesForClickableURLs -- forward declare (used before definition)
 local function HookChatFramesForClickableURLs()
+HookCommunitiesFramesForClickableURLs()
     if not _G.ChatFrame1 then return end
 
     for i = 1, (NUM_CHAT_WINDOWS or 0) do
@@ -151,13 +153,61 @@ local function HookChatFramesForClickableURLs()
     end
 end
 
+
+-------------------------------------------------
+-- Communities / Guild UI message frames (Retail)
+-------------------------------------------------
+-- notes: The Communities/Guild UI uses its own scrolling message frame and does not always
+-- go through CHAT_MSG_* filters or ChatFrame:AddMessage. We hook its AddMessage too.
+
+local function _TryHookMessageFrame(frame)
+    if not frame or frame.__ClickLinksHooked then return end
+    if type(frame.AddMessage) ~= "function" then return end
+
+    frame.__ClickLinksHooked = true
+    local origAddMessage = frame.AddMessage
+    frame.AddMessage = function(self, msg, ...)
+        if type(msg) == "string" and not msg:find("|H") then
+            local _, newMsg = makeClickable(self, "MESSAGE_FRAME_ADD_MESSAGE", msg, ...)
+            msg = newMsg or msg
+        end
+        return origAddMessage(self, msg, ...)
+    end
+end
+
+HookCommunitiesFramesForClickableURLs = function()
+    local cf = _G.CommunitiesFrame
+    if not cf then return end
+
+    local candidates = {
+        cf.Chat and cf.Chat.MessageFrame,
+        cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.Chat and cf.Chat.InsetFrame.Chat.MessageFrame,
+        cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.ChatFrame and cf.Chat.InsetFrame.ChatFrame.MessageFrame,
+        cf.ChatFrame and cf.ChatFrame.MessageFrame,
+        cf.ChatFrame,
+    }
+
+    for _, f in ipairs(candidates) do
+        _TryHookMessageFrame(f)
+    end
+end
+
 -- Try immediately (addon load), and also after login in case chat frames are not fully built yet.
 HookChatFramesForClickableURLs()
 local __clHookFrame = CreateFrame("Frame")
 __clHookFrame:RegisterEvent("PLAYER_LOGIN")
 __clHookFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-__clHookFrame:SetScript("OnEvent", function()
+__clHookFrame:RegisterEvent("ADDON_LOADED")
+__clHookFrame:SetScript("OnEvent", function(_, event, addonName)
     HookChatFramesForClickableURLs()
+    -- Communities/Guild UI is loaded on-demand on Retail
+    if event == "ADDON_LOADED" then
+        if addonName == "Blizzard_Communities" or addonName == "Blizzard_GuildUI" then
+            HookCommunitiesFramesForClickableURLs()
+        end
+    else
+        HookCommunitiesFramesForClickableURLs()
+    end
 end)
 
 -------------------------------------------------
@@ -220,6 +270,41 @@ ClickLinksDB.journal = ClickLinksDB.journal or {}
 ClickLinksDB.journalMax = ClickLinksDB.journalMax or 200
 ClickLinksDB.minimap = ClickLinksDB.minimap or { hide = false, angle = 220 }
 
+
+-- ---- Journal data normalization ----
+-- notes:
+--   Older test builds (or manual edits) may leave the journal as a sparse table or with non-entry values.
+--   Normalize it into a clean array so #journal, table.remove, and UI iteration are safe.
+local function _NormalizeJournal()
+    local j = ClickLinksDB.journal
+    if type(j) ~= "table" then
+        ClickLinksDB.journal = {}
+        return
+    end
+
+    local arr = {}
+
+    for _, v in pairs(j) do
+        if type(v) == "table" then
+            local url = v.url or v[1]
+            local t = v.t or v.time or v[2]
+            if type(url) == "string" and url ~= "" then
+                table.insert(arr, { url = url, t = tonumber(t) or time() })
+            end
+        elseif type(v) == "string" and v ~= "" then
+            table.insert(arr, { url = v, t = time() })
+        end
+    end
+
+    table.sort(arr, function(a, b)
+        return (a.t or 0) < (b.t or 0) -- oldest -> newest
+    end)
+
+    ClickLinksDB.journal = arr
+end
+
+_NormalizeJournal()
+
 local function _TrimJournal()
     local maxKeep = tonumber(ClickLinksDB.journalMax) or 200
     if maxKeep < 10 then maxKeep = 10 end
@@ -238,6 +323,10 @@ local function _ClearJournal()
         j[i] = nil
     end
 end
+
+-- Journal UI forward declarations (so journal updates live while the window is open)
+local JournalFrame, JournalScrollChild, JournalButtons = nil, nil, nil
+local _UpdateJournalUI  -- forward declaration (used by _AddToJournal and journal actions)
 
 _AddToJournal = function(url)
     url = tostring(url or ""):gsub("%s+$", ""):gsub("^%s+", "")
@@ -258,8 +347,7 @@ _AddToJournal = function(url)
 end
 
 -- ---- Journal UI ----
-local JournalFrame, JournalScrollChild, JournalButtons = nil, nil, nil
-local _UpdateJournalUI  -- forward declaration (used by Clear All button and journal actions)
+-- (JournalFrame locals were forward-declared above so _AddToJournal can refresh the list live)
 
 local function _FormatTime(ts)
     if type(date) == "function" and ts then
@@ -344,7 +432,10 @@ _UpdateJournalUI = function()
     if not JournalFrame or not JournalFrame:IsShown() then return end
     _EnsureJournalUI()
 
+    -- Ensure journal is a clean array (protects against old saved data / sparse tables)
+    _NormalizeJournal()
     local j = ClickLinksDB.journal
+
     local rowH = 20
     local width = 460
 
@@ -352,55 +443,62 @@ _UpdateJournalUI = function()
         JournalButtons[i]:Hide()
     end
 
+    local shown = 0
+
+    -- Newest-first (journal is oldest->newest, so iterate backwards)
     for i = #j, 1, -1 do
-        local idx = #j - i + 1  -- 1..#j newest first
-        local btn = JournalButtons[idx]
-        if not btn then
-            btn = CreateFrame("Button", nil, JournalScrollChild)
-            btn:SetHeight(rowH)
-            btn:SetWidth(width)
-            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            btn.text:SetPoint("LEFT", 2, 0)
-            btn.text:SetJustifyH("LEFT")
-            btn.text:SetWidth(width - 4)
-            btn.text:SetWordWrap(false)
-
-            btn:SetHighlightTexture("Interface/QuestFrame/UI-QuestTitleHighlight")
-            btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-            btn:SetScript("OnClick", function(self, button)
-                local url = self._url
-                if not url then return end
-                if button == "RightButton" then
-                    -- remove the first matching entry (newest-first is fine)
-                    for k = #ClickLinksDB.journal, 1, -1 do
-                        if ClickLinksDB.journal[k] and ClickLinksDB.journal[k].url == url then
-                            table.remove(ClickLinksDB.journal, k)
-                            break
-                        end
-                    end
-                    _UpdateJournalUI()
-                else
-                    StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = url })
-                end
-            end)
-
-            JournalButtons[idx] = btn
-        end
-
         local entry = j[i]
-        local ts = _FormatTime(entry.t)
-        local display = entry.url or ""
-        if #display > 300 then display = display:sub(1, 300) .. "..." end
+        if entry and type(entry.url) == "string" and entry.url ~= "" then
+            shown = shown + 1
+            local idx = shown -- 1..shown newest first
+            local btn = JournalButtons[idx]
+            if not btn then
+                btn = CreateFrame("Button", nil, JournalScrollChild)
+                btn:SetHeight(rowH)
+                btn:SetWidth(width)
+                btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                btn.text:SetPoint("LEFT", 2, 0)
+                btn.text:SetJustifyH("LEFT")
+                btn.text:SetWidth(width - 4)
+                btn.text:SetWordWrap(false)
 
-        btn._url = entry.url
-        btn.text:SetText((ts ~= "" and ("|cffaaaaaa" .. ts .. "|r  ") or "") .. display)
-        btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", 0, -((idx - 1) * rowH))
-        btn:Show()
+                btn:SetHighlightTexture("Interface/QuestFrame/UI-QuestTitleHighlight")
+                btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                btn:SetScript("OnClick", function(self, button)
+                    local url = self._url
+                    if not url then return end
+                    if button == "RightButton" then
+                        -- remove the first matching entry (newest-first is fine)
+                        for k = #ClickLinksDB.journal, 1, -1 do
+                            if ClickLinksDB.journal[k] and ClickLinksDB.journal[k].url == url then
+                                table.remove(ClickLinksDB.journal, k)
+                                break
+                            end
+                        end
+                        _UpdateJournalUI()
+                    else
+                        StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = url })
+                    end
+                end)
+
+                JournalButtons[idx] = btn
+            end
+
+            local ts = _FormatTime(entry.t)
+            local display = entry.url or ""
+            if #display > 300 then display = display:sub(1, 300) .. "..." end
+
+            btn._url = entry.url
+            btn.text:SetText((ts ~= "" and ("|cffaaaaaa" .. ts .. "|r  ") or "") .. display)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", 0, -((idx - 1) * rowH))
+            btn:Show()
+        end
     end
 
-    JournalScrollChild:SetHeight(math.max(1, (#j) * rowH))
+    JournalScrollChild:SetHeight(math.max(1, shown * rowH))
 end
+
 
 local function ToggleJournal()
     _EnsureJournalUI()
@@ -448,13 +546,14 @@ local function _InitMinimap()
     LDBObj = LDB:NewDataObject("ClickLinks", {
         type = "launcher",
         icon = "Interface/ICONS/INV_Misc_Note_04",
-        OnClick = function()
-            ToggleJournal()
+        OnClick = function(_, button)
+            if button == "LeftButton" then
+                ToggleJournal()
+            end
         end,
         OnTooltipShow = function(tt)
             tt:AddLine("Click Links", 0.08, 0.63, 0.85)
             tt:AddLine("Left-click: Journal", 1, 1, 1)
-            tt:AddLine("Right-click: Version", 1, 1, 1)
             tt:AddLine("Drag: Move", 1, 1, 1)
         end,
     })
