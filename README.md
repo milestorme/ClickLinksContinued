@@ -25,6 +25,15 @@ This version is a continued and maintained fork with modern API support, an in-g
   - **Clear All** button with a confirmation prompt
   - **Cap protection:** when the journal reaches its limit, newest links are kept and oldest links are removed automatically
 
+- 🌍 **Full multi-language support (AceLocale)**
+  - English (enUS) — base / fallback
+  - Chinese Simplified (zhCN)
+  - Chinese Traditional (zhTW)
+  - Russian (ruRU)
+  - German (deDE)
+  - Spanish (esES)
+  - 100% locale key coverage (no missing translation errors)
+
 - 🧭 **Minimap button (LibDBIcon-1.0)**
   - Left-click toggles the Journal window
   - Position + hidden state are saved
@@ -35,10 +44,16 @@ This version is a continued and maintained fork with modern API support, an in-g
   - Detects newer versions used by group members
   - Displays a **one-time update warning** to avoid spam
 
+- 🧩 **Broad client compatibility**
+  - Retail
+  - Classic Era
+  - TBC / Wrath / MoP clients (via multiple TOCs)
+  - Titan Forged 3.80.0
+
 - ⚡ **Lightweight & safe**
   - No combat scanning / no performance-heavy loops
   - Safe link handling (won’t corrupt item/spell links)
-  - Works across Retail + supported Classic variants (per included TOCs)
+  - Clean TOC files (no duplicate loads)
 
 ---
 
@@ -76,7 +91,7 @@ Click Links works in nearly all chat types, including:
 2. Extract into: `World of Warcraft/_retail_/Interface/AddOns/ClickLinks/`
 
 ### Manual / GitHub
-1. Download [Release.zip](https://github.com/milestorme/ClickLinks/blob/main/Release.zip)
+1. Download Release.zip
 2. Extract the `ClickLinks` folder into your `Interface/AddOns/` directory
 3. Ensure your folder looks like:
 
@@ -101,3 +116,4 @@ The addon stores settings (and the Journal, if used) in:
 
 - Original addon: **Click Links** by tannerng
 - Continued & maintained fork: **Milestorme**
+

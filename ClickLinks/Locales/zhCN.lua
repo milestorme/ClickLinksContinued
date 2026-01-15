@@ -1,0 +1,22 @@
+local L = LibStub("AceLocale-3.0"):NewLocale("ClickLinks", "zhCN")
+if not L then return end
+
+L["ADDON_NAME"] = "Click Links"
+L["ADDON_TITLE"] = "Click Links"
+L["CANCEL"] = "取消"
+L["CLEAR_ALL"] = "全部清除"
+L["CLEAR_ALL_CONFIRM"] = "清除所有已保存的链接？"
+L["COPYBOX_HINT"] = "按 Ctrl+C 复制链接"
+L["HELP_LINE_JOURNAL"] = "/clicklinks journal - 打开保存的链接日志"
+L["HELP_LINE_MINIMAP"] = "/clicklinks minimap - 切换小地图按钮"
+L["HELP_LINE_VERSION"] = "/clicklinks version - 显示插件版本"
+L["JOURNAL_HINT"] = "左键点击条目复制，右键点击移除。"
+L["JOURNAL_TITLE"] = "Click Links - 日志"
+L["NEWER_VERSION"] = "检测到更新版本："
+L["OK"] = "确定"
+L["TOOLTIP_DRAG_MOVE"] = "拖动：移动"
+L["TOOLTIP_LEFTCLICK_JOURNAL"] = "左键：日志"
+L["UPDATE_AVAILABLE"] = "有可用的新版本。"
+L["UPDATE_HINT"] = "请通过 CurseForge 更新。"
+L["VERSION_CMD"] = "插件版本："
+L["YOUR_VERSION"] = "你的版本："

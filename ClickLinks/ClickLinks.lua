@@ -7,6 +7,8 @@
 
 local ADDON_NAME = ...
 
+local L = LibStub("AceLocale-3.0"):GetLocale("ClickLinks")
+
 -------------------------------------------------
 -- FUNCTION INDEX
 -------------------------------------------------
@@ -215,7 +217,7 @@ end)
 -------------------------------------------------
 -- notes: Popup with editbox: user can Ctrl+C the URL.
 StaticPopupDialogs["CLICK_LINK_CLICKURL"] = {
-    text = "Press Ctrl+C to copy link",
+    text = L["COPYBOX_HINT"],
     button1 = CLOSE,
     timeout = 0,
     whileDead = true,
@@ -383,11 +385,11 @@ local function _EnsureJournalUI()
 
     local title = JournalFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", 0, -10)
-    title:SetText("Click Links - Journal")
+    title:SetText(L["JOURNAL_TITLE"])
 
     local hint = JournalFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetPoint("TOP", title, "BOTTOM", 0, -6)
-    hint:SetText("Left-click an entry to copy. Right-click to remove.")
+    hint:SetText(L["JOURNAL_HINT"])
 
     local close = CreateFrame("Button", nil, JournalFrame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -2, -2)
@@ -395,13 +397,13 @@ local function _EnsureJournalUI()
     local clear = CreateFrame("Button", nil, JournalFrame, "UIPanelButtonTemplate")
     clear:SetSize(90, 22)
     clear:SetPoint("TOPRIGHT", -38, -28)
-    clear:SetText((L and L.CLEAR_ALL) or "Clear All")
+    clear:SetText(L["CLEAR_ALL"])
     clear:SetScript("OnClick", function()
         -- Confirm before wiping the entire journal (prevents misclicks)
         StaticPopupDialogs["CLICKLINKS_CLEAR_JOURNAL_CONFIRM"] = StaticPopupDialogs["CLICKLINKS_CLEAR_JOURNAL_CONFIRM"] or {
-            text = (L and L.CLEAR_ALL_CONFIRM) or "Clear all saved links?",
-            button1 = (L and L.OK) or OKAY,
-            button2 = (L and L.CANCEL) or CANCEL,
+            text = L["CLEAR_ALL_CONFIRM"],
+            button1 = L["OK"],
+            button2 = L["CANCEL"],
             OnAccept = function()
                 _ClearJournal()
                 if JournalFrame and JournalFrame:IsShown() and _UpdateJournalUI then
@@ -519,10 +521,6 @@ end
 
 -- Forward declaration:
 -- The minimap icon's OnClick closure is created before the localization table is assigned.
--- If we declare L later with `local L = {...}`, the closure binds to a GLOBAL 'L' (nil).
--- Declaring it here makes L a local upvalue and fixes RightButton errors.
-local L
-
 local DBIcon = nil
 local LDB = nil
 local LDBObj = nil
@@ -544,6 +542,8 @@ local function _InitMinimap()
     ClickLinksDB.minimap.angle = nil
 
     LDBObj = LDB:NewDataObject("ClickLinks", {
+        label = L["ADDON_TITLE"],
+        text = L["ADDON_TITLE"],
         type = "launcher",
         icon = "Interface/ICONS/INV_Misc_Note_04",
         OnClick = function(_, button)
@@ -552,9 +552,9 @@ local function _InitMinimap()
             end
         end,
         OnTooltipShow = function(tt)
-            tt:AddLine("Click Links", 0.08, 0.63, 0.85)
-            tt:AddLine("Left-click: Journal", 1, 1, 1)
-            tt:AddLine("Drag: Move", 1, 1, 1)
+            tt:AddLine(L["ADDON_TITLE"], 0.08, 0.63, 0.85)
+            tt:AddLine(L["TOOLTIP_LEFTCLICK_JOURNAL"], 1, 1, 1)
+            tt:AddLine(L["TOOLTIP_DRAG_MOVE"], 1, 1, 1)
         end,
     })
 
@@ -578,16 +578,6 @@ local function ToggleMinimapButton()
 end
 
 -- notes: Localization-ready strings (single table).
-L = {
-    ADDON_NAME = "Click Links",
-    CLEAR_ALL = "Clear All",
-    UPDATE_AVAILABLE = "A newer version is available.",
-    YOUR_VERSION = "Your version:",
-    NEWER_VERSION = "Newer version detected:",
-    UPDATE_HINT = "Please update via CurseForge.",
-    VERSION_CMD = "Addon version:",
-}
-
 -- notes: Reads the addon Version field from the TOC metadata.
 local localVersion = ( (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata )(ADDON_NAME, "Version")
     or ( (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata )("ClickLinks", "Version")
@@ -654,10 +644,10 @@ f:SetScript("OnEvent", function(_, event, prefix, message)
         local remoteVerNum = VersionToNumber(message)
         if remoteVerNum > localVerNum and not ClickLinksDB.warned then
             ClickLinksDB.warned = true
-            print("|cffff0000" .. L.ADDON_NAME .. ":|r " .. L.UPDATE_AVAILABLE)
-            print("|cffffcc00" .. L.YOUR_VERSION .. "|r", localVersion)
-            print("|cffffcc00" .. L.NEWER_VERSION .. "|r", message)
-            print("|cffffcc00" .. L.UPDATE_HINT .. "|r")
+            print("|cffff0000" .. L["ADDON_NAME"] .. ":|r " .. L["UPDATE_AVAILABLE"])
+            print("|cffffcc00" .. L["YOUR_VERSION"] .. "|r", localVersion)
+            print("|cffffcc00" .. L["NEWER_VERSION"] .. "|r", message)
+            print("|cffffcc00" .. L["UPDATE_HINT"] .. "|r")
         end
     end
 end)
@@ -673,8 +663,8 @@ SlashCmdList["CLICKLINKS"] = function(msg)
     msg = msg and msg:lower() or ""
 
     if msg == "version" or msg == "ver" then
-        print("|cff149bfd" .. L.ADDON_NAME .. "|r")
-        print("|cffffcc00" .. L.VERSION_CMD .. "|r", localVersion)
+        print("|cff149bfd" .. L["ADDON_NAME"] .. "|r")
+        print("|cffffcc00" .. L["VERSION_CMD"] .. "|r", localVersion)
 
     elseif msg == "journal" or msg == "log" then
         ToggleJournal()
@@ -683,9 +673,9 @@ SlashCmdList["CLICKLINKS"] = function(msg)
         ToggleMinimapButton()
 
     else
-        print("|cff149bfd" .. L.ADDON_NAME .. "|r")
-        print("|cffffcc00/clicklinks version|r - Show addon version")
-        print("|cffffcc00/clicklinks journal|r - Open saved link journal")
-        print("|cffffcc00/clicklinks minimap|r - Toggle minimap button")
+        print("|cff149bfd" .. L["ADDON_NAME"] .. "|r")
+        print("|cffffcc00" .. L["HELP_LINE_VERSION"] .. "|r")
+        print("|cffffcc00" .. L["HELP_LINE_JOURNAL"] .. "|r")
+        print("|cffffcc00" .. L["HELP_LINE_MINIMAP"] .. "|r")
     end
 end

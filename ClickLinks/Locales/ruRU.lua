@@ -1,0 +1,22 @@
+local L = LibStub("AceLocale-3.0"):NewLocale("ClickLinks", "ruRU")
+if not L then return end
+
+L["ADDON_NAME"] = "Click Links"
+L["ADDON_TITLE"] = "Click Links"
+L["CANCEL"] = "Отмена"
+L["CLEAR_ALL"] = "Очистить всё"
+L["CLEAR_ALL_CONFIRM"] = "Очистить все сохранённые ссылки?"
+L["COPYBOX_HINT"] = "Нажмите Ctrl+C, чтобы скопировать ссылку"
+L["HELP_LINE_JOURNAL"] = "/clicklinks journal - Открыть журнал ссылок"
+L["HELP_LINE_MINIMAP"] = "/clicklinks minimap - Переключить кнопку у миникарты"
+L["HELP_LINE_VERSION"] = "/clicklinks version - Показать версию аддона"
+L["JOURNAL_HINT"] = "ЛКМ по записи — копировать. ПКМ — удалить."
+L["JOURNAL_TITLE"] = "Click Links — Журнал"
+L["NEWER_VERSION"] = "Обнаружена более новая версия:"
+L["OK"] = "OK"
+L["TOOLTIP_DRAG_MOVE"] = "Перетащить: переместить"
+L["TOOLTIP_LEFTCLICK_JOURNAL"] = "ЛКМ: журнал"
+L["UPDATE_AVAILABLE"] = "Доступна новая версия."
+L["UPDATE_HINT"] = "Пожалуйста, обновите через CurseForge."
+L["VERSION_CMD"] = "Версия аддона:"
+L["YOUR_VERSION"] = "Ваша версия:"
