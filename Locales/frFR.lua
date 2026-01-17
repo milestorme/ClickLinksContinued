@@ -1,0 +1,22 @@
+local L = LibStub("AceLocale-3.0"):NewLocale("ClickLinks", "frFR")
+if not L then return end
+
+L["ADDON_NAME"] = "Click Links"
+L["ADDON_TITLE"] = "Click Links"
+L["CANCEL"] = "Annuler"
+L["CLEAR_ALL"] = "Tout effacer"
+L["CLEAR_ALL_CONFIRM"] = "Effacer tous les liens enregistrés ?"
+L["COPYBOX_HINT"] = "Appuyez sur Ctrl+C pour copier le lien"
+L["HELP_LINE_JOURNAL"] = "/clicklinks journal - Ouvrir le journal des liens"
+L["HELP_LINE_MINIMAP"] = "/clicklinks minimap - Afficher/masquer le bouton de la mini-carte"
+L["HELP_LINE_VERSION"] = "/clicklinks version - Afficher la version de l'addon"
+L["JOURNAL_HINT"] = "Clic gauche : copier. Clic droit : supprimer."
+L["JOURNAL_TITLE"] = "Click Links - Journal"
+L["NEWER_VERSION"] = "Version plus récente détectée :"
+L["OK"] = "OK"
+L["TOOLTIP_DRAG_MOVE"] = "Glisser : déplacer"
+L["TOOLTIP_LEFTCLICK_JOURNAL"] = "Clic gauche : journal"
+L["UPDATE_AVAILABLE"] = "Une version plus récente est disponible."
+L["UPDATE_HINT"] = "Veuillez mettre à jour via CurseForge."
+L["VERSION_CMD"] = "Version de l'addon :"
+L["YOUR_VERSION"] = "Votre version :"

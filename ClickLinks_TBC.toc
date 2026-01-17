@@ -1,19 +1,27 @@
-## Interface: 50503
+## Interface: 20505
 ## Title: ClickLinks
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 1.1.6
+## Version: 1.1.9
 ## SavedVariables: ClickLinksDB
+## X-Locale: enUS
+## X-Localizations: enUS, deDE, esES, esMX, frFR, itIT, jaJP, koKR, ptBR, ruRU, zhCN, zhTW
 
 Libs\LibStub\LibStub.lua
 Libs\AceLocale-3.0\AceLocale-3.0.lua
 Locales\enUS.lua
-Locales\zhCN.lua
-Locales\zhTW.lua
-Locales\ruRU.lua
 Locales\deDE.lua
 Locales\esES.lua
+Locales\esMX.lua
+Locales\frFR.lua
+Locales\itIT.lua
+Locales\jaJP.lua
+Locales\koKR.lua
+Locales\ptBR.lua
+Locales\ruRU.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
 Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua

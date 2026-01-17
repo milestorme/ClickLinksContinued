@@ -1,0 +1,22 @@
+local L = LibStub("AceLocale-3.0"):NewLocale("ClickLinks", "koKR")
+if not L then return end
+
+L["ADDON_NAME"] = "Click Links"
+L["ADDON_TITLE"] = "Click Links"
+L["CANCEL"] = "취소"
+L["CLEAR_ALL"] = "모두 지우기"
+L["CLEAR_ALL_CONFIRM"] = "저장된 링크를 모두 지울까요?"
+L["COPYBOX_HINT"] = "Ctrl+C 를 눌러 링크 복사"
+L["HELP_LINE_JOURNAL"] = "/clicklinks journal - 저장된 링크 저널 열기"
+L["HELP_LINE_MINIMAP"] = "/clicklinks minimap - 미니맵 버튼 표시/숨김"
+L["HELP_LINE_VERSION"] = "/clicklinks version - 애드온 버전 표시"
+L["JOURNAL_HINT"] = "왼쪽 클릭: 복사. 오른쪽 클릭: 삭제."
+L["JOURNAL_TITLE"] = "Click Links - 저널"
+L["NEWER_VERSION"] = "새 버전이 감지되었습니다:"
+L["OK"] = "확인"
+L["TOOLTIP_DRAG_MOVE"] = "드래그: 이동"
+L["TOOLTIP_LEFTCLICK_JOURNAL"] = "왼쪽 클릭: 저널"
+L["UPDATE_AVAILABLE"] = "새 버전이 있습니다."
+L["UPDATE_HINT"] = "CurseForge에서 업데이트하세요."
+L["VERSION_CMD"] = "애드온 버전:"
+L["YOUR_VERSION"] = "내 버전:"
