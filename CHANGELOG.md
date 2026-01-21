@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1a
+- Added icon, updated TOC
+- Fixed journal not saving on titan Reforged
+
+## 2.0.1
+- Auto-disable ClickLinks processing in battlegrounds/arenas and safely skip Retail 12.x "secret" chat values.
+
 ## 2.0.0
 - Added support for Midnight
 

@@ -3,8 +3,10 @@
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 2.0.0
+## Version: 2.0.1
 ## SavedVariables: ClickLinksDB
+## Category: Chat
+## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga
 ## X-Locale: enUS
 ## X-Localizations: enUS, deDE, esES, esMX, frFR, itIT, jaJP, koKR, ptBR, ruRU, zhCN, zhTW
 

@@ -75,6 +75,39 @@ local function formatURL(url)
     return "|cff149bfd|Hurl:" .. url .. "|h[" .. url .. "]|h|r "
 end
 
+
+-- ------------------------------------------------
+-- Safety helpers (Retail 12.x "secret" chat values)
+-- ------------------------------------------------
+-- notes:
+--   Retail 12.x may pass "secret" values into chat frames (e.g. in PvP instances).
+--   These values behave like strings in some contexts but error on indexing/string methods.
+--   We defensively wrap string operations with pcall and/or skip processing.
+
+local function _CL_SafeCall(fn, ...)
+    local ok, a, b, c, d = pcall(fn, ...)
+    if ok then return true, a, b, c, d end
+    return false
+end
+
+local function _CL_CanTreatAsString(v)
+    if type(v) ~= "string" then return false end
+    -- Some secret values report as "string" but throw on operations; # is a cheap probe.
+    return _CL_SafeCall(function(s) return #s end, v)
+end
+
+local function _CL_SafeFind(s, pattern, plain)
+    local ok, idx = _CL_SafeCall(function(str, pat, isPlain)
+        return string.find(str, pat, 1, isPlain)
+    end, s, pattern, plain == true)
+    if ok then return idx end
+    return nil
+end
+
+local function _CL_IsRuntimeDisabled()
+    return false
+end
+
 -------------------------------------------------
 -- Chat message filter
 -------------------------------------------------
@@ -85,23 +118,38 @@ local function makeClickable(self, event, msg, ...)
 
     -- If the line already contains hyperlinks (items/spells/etc), don't touch it.
     -- This avoids edge-case corruption and plays nicer with other chat addons.
-    if msg and msg:find("|H") then
+    if _CL_IsRuntimeDisabled() then
+        return false, msg, ...
+    end
+
+    -- Retail 12.x can pass "secret" chat values that error on string methods.
+    if not _CL_CanTreatAsString(msg) then
+        return false, msg, ...
+    end
+
+    -- If the line already contains hyperlinks (items/spells/etc), don't touch it.
+    if _CL_SafeFind(msg, "|H", true) then
         return false, msg, ...
     end
 
     -- Quick pre-check to avoid unnecessary gsub
-    -- Note: include IP-only links like 123.45.67.89:28015 which don't contain "://", "www.", or "@".
-    if not msg
-        or (not msg:find("://")
-            and not msg:find("www%.")
-            and not msg:find("@")
-            and not msg:find("%d+%.%d+%.%d+%.%d+"))
+    if not (_CL_SafeFind(msg, "://", true)
+        or _CL_SafeFind(msg, "www%.")
+        or _CL_SafeFind(msg, "@", true)
+        or _CL_SafeFind(msg, "%d+%.%d+%.%d+%.%d+"))
     then
         return false, msg, ...
     end
 
-    for _, pattern in ipairs(URL_PATTERNS) do
-        msg = msg:gsub(pattern, formatURL)
+
+    local ok, newMsg = _CL_SafeCall(function(m)
+        for _, pattern in ipairs(URL_PATTERNS) do
+            m = m:gsub(pattern, formatURL)
+        end
+        return m
+    end, msg)
+    if ok and type(newMsg) == "string" then
+        msg = newMsg
     end
     return false, msg, ...
 end
@@ -139,14 +187,21 @@ HookCommunitiesFramesForClickableURLs()
 
             local origAddMessage = cf.AddMessage
             cf.AddMessage = function(self, text, ...)
-                if type(text) == "string" then
+                -- Auto-disable (and avoid "secret value" errors) in PvP instances if enabled.
+                if _CL_IsRuntimeDisabled() then
+                    return origAddMessage(self, text, ...)
+                end
+
+                if _CL_CanTreatAsString(text) then
                     -- Reuse the same safety rules as makeClickable:
                     -- 1) Do not touch existing hyperlinks
                     -- 2) Only process if it looks like it contains a URL/email/IP
-                    if not text:find("|H") then
+                    if not _CL_SafeFind(text, "|H", true) then
                         -- makeClickable returns (false, msg, ...) because it's a filter; we only need the transformed msg.
-                        local _, newText = makeClickable(self, "ADD_MESSAGE", text, ...)
-                        text = newText or text
+                        local ok, _, newText = _CL_SafeCall(makeClickable, self, "ADD_MESSAGE", text, ...)
+                        if ok and newText then
+                            text = newText
+                        end
                     end
                 end
                 return origAddMessage(self, text, ...)
@@ -169,9 +224,15 @@ local function _TryHookMessageFrame(frame)
     frame.__ClickLinksHooked = true
     local origAddMessage = frame.AddMessage
     frame.AddMessage = function(self, msg, ...)
-        if type(msg) == "string" and not msg:find("|H") then
-            local _, newMsg = makeClickable(self, "MESSAGE_FRAME_ADD_MESSAGE", msg, ...)
-            msg = newMsg or msg
+        if _CL_IsRuntimeDisabled() then
+            return origAddMessage(self, msg, ...)
+        end
+
+        if _CL_CanTreatAsString(msg) and not _CL_SafeFind(msg, "|H", true) then
+            local ok, _, newMsg = _CL_SafeCall(makeClickable, self, "MESSAGE_FRAME_ADD_MESSAGE", msg, ...)
+            if ok and newMsg then
+                msg = newMsg
+            end
         end
         return origAddMessage(self, msg, ...)
     end
@@ -271,6 +332,43 @@ ClickLinksDB = ClickLinksDB or { warned = false }
 ClickLinksDB.journal = ClickLinksDB.journal or {}
 ClickLinksDB.journalMax = ClickLinksDB.journalMax or 200
 ClickLinksDB.minimap = ClickLinksDB.minimap or { hide = false, angle = 220 }
+
+-- ------------------------------------------------
+-- Auto-disable in PvP instances (Retail 12.x safety)
+-- ------------------------------------------------
+-- notes:
+--   In Retail 12.x, certain chat messages in PvP instances may carry "secret" values.
+--   We automatically skip ClickLinks processing while in battlegrounds/arenas (and resume on exit).
+--   Users can disable this behavior by setting ClickLinksDB.autoDisablePvP = false.
+
+ClickLinksDB.autoDisablePvP = (ClickLinksDB.autoDisablePvP ~= false)
+
+local ClickLinksRuntimeDisabled = false
+local function _CL_UpdateRuntimeDisabled()
+    if ClickLinksDB and ClickLinksDB.autoDisablePvP then
+        local inInstance, instanceType = IsInInstance()
+        ClickLinksRuntimeDisabled = inInstance and (instanceType == "pvp" or instanceType == "arena")
+    else
+        ClickLinksRuntimeDisabled = false
+    end
+end
+
+-- Replace the forward stub with the real runtime flag.
+_CL_IsRuntimeDisabled = function()
+    return ClickLinksRuntimeDisabled
+end
+
+do
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    f:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
+    f:SetScript("OnEvent", function()
+        _CL_UpdateRuntimeDisabled()
+    end)
+    _CL_UpdateRuntimeDisabled()
+end
+
 
 
 -- ---- Journal data normalization ----
@@ -671,6 +769,11 @@ SlashCmdList["CLICKLINKS"] = function(msg)
 
     elseif msg == "minimap" then
         ToggleMinimapButton()
+
+    elseif msg == "pvp" or msg == "bg" then
+        ClickLinksDB.autoDisablePvP = not (ClickLinksDB.autoDisablePvP == true)
+        _CL_UpdateRuntimeDisabled()
+        print("|cff149bfd" .. (L and L["ADDON_NAME"] or "ClickLinks") .. "|r: Auto-disable in PvP is now " .. (ClickLinksDB.autoDisablePvP and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
 
     else
         print("|cff149bfd" .. L["ADDON_NAME"] .. "|r")
