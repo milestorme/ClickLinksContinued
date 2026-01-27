@@ -1,11 +1,20 @@
 # Changelog
 
+## 2.0.3
+**Fixes**
+- Fixed ClickLinks copy popup not opening when ElvUI is enabled.
+- Reworked hyperlink click handling to hook SetItemRef safely (ElvUI-compatible).
+- Fixed stack overflow / recursion from SetItemRef re-wrapping.
+- Non-URL links (player/item/spell/etc.) now pass through untouched.
+- Added recursion guards to prevent conflicts when other addons replace SetItemRef.
+
 ## 2.0.2
 **Retail / All Versions**
 - Removed PvP auto-disable logic entirely (no longer needed on Retail 12.x).
 - ClickLinks now operates normally inside battlegrounds and arenas.
 - Journal entries now display URLs in Blizzard-style hyperlink blue.
 - Internal cleanup: removed unused PvP settings, runtime flags, slash commands, and locale keys.
+- Fixed URL copy popup not opening with ElvUI by hooking hyperlink clicks at SetItemRef (more robust than ItemRefTooltip:SetHyperlink).
 
 ## 2.0.1a
 - Added icon

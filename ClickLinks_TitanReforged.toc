@@ -2,7 +2,7 @@
 ## Title: Click Links
 ## Notes: Makes URLs clickable in chat and provides a clickable journal.
 ## Author: tannerng, Milestorme
-## Version: 2.0.2
+## Version: 2.0.3
 ## SavedVariables: ClickLinksDB
 ## Category: Chat
 ## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga

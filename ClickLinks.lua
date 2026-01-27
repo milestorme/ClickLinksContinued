@@ -263,6 +263,7 @@ __clHookFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 __clHookFrame:RegisterEvent("ADDON_LOADED")
 __clHookFrame:SetScript("OnEvent", function(_, event, addonName)
     HookChatFramesForClickableURLs()
+    if _G.ClickLinks_EnsureSetItemRefHook then _G.ClickLinks_EnsureSetItemRefHook() end
     -- Communities/Guild UI is loaded on-demand on Retail
     if event == "ADDON_LOADED" then
         if addonName == "Blizzard_Communities" or addonName == "Blizzard_GuildUI" then
@@ -300,11 +301,75 @@ StaticPopupDialogs["CLICK_LINK_CLICKURL"] = {
 
 local _AddToJournal -- forward declared (used by ItemRefTooltip hook)
 
+local _AddToJournal -- forward declared (used by URL hooks)
+
+--[[-------------------------------------------------------------------------
+ElvUI (and some other UI mods) may replace ItemRefTooltip:SetHyperlink after we
+hook it, which can prevent our URL popup from firing. Hooking SetItemRef is
+more reliable because it runs when a hyperlink is clicked.
+---------------------------------------------------------------------------]]
+
+-- Keep original for non-url links; we will re-capture if another addon replaces SetItemRef.
+local _OriginalSetItemRef
+
+-- Capture a base fallback the first time we ever run, before other addons start
+-- swapping SetItemRef around.
+_G.ClickLinks_OriginalSetItemRef_Base = _G.ClickLinks_OriginalSetItemRef_Base or _G.SetItemRef
+
+-- Wrapper is defined once. We only swap _OriginalSetItemRef as other addons replace SetItemRef.
+_G.ClickLinks_SetItemRef_Wrapper = _G.ClickLinks_SetItemRef_Wrapper or function(link, text, button, chatFrame)
+    -- Prevent infinite recursion if load-order causes _OriginalSetItemRef to point back at us.
+    if _G.__ClickLinks_InSetItemRef then
+        local fallback = _G.ClickLinks_OriginalSetItemRef_Base
+        if fallback and fallback ~= _G.ClickLinks_SetItemRef_Wrapper then
+            return fallback(link, text, button, chatFrame)
+        end
+        return
+    end
+
+    if type(link) == "string" and link:match("^url:") then
+        local u = link:sub(5)
+        _AddToJournal(u)
+        StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = u })
+        return
+    end
+
+    local orig = _OriginalSetItemRef or _G.ClickLinks_OriginalSetItemRef_Base
+    if not orig or orig == _G.ClickLinks_SetItemRef_Wrapper then
+        orig = _G.ClickLinks_OriginalSetItemRef_Base
+    end
+
+    _G.__ClickLinks_InSetItemRef = true
+    local ok, r1, r2, r3, r4 = pcall(orig, link, text, button, chatFrame)
+    _G.__ClickLinks_InSetItemRef = false
+
+    if ok then
+        return r1, r2, r3, r4
+    end
+end
+
+_G.ClickLinks_EnsureSetItemRefHook = function()
+    local current = _G.SetItemRef
+    if current == _G.ClickLinks_SetItemRef_Wrapper then
+        return
+    end
+
+    -- Don't allow "original" to ever be our wrapper.
+    _OriginalSetItemRef = current
+    if not _OriginalSetItemRef or _OriginalSetItemRef == _G.ClickLinks_SetItemRef_Wrapper then
+        _OriginalSetItemRef = _G.ClickLinks_OriginalSetItemRef_Base
+    end
+
+    _G.SetItemRef = _G.ClickLinks_SetItemRef_Wrapper
+end
+
+-- Call once now, and again after other addons load (eg. ElvUI) to keep our hook active.
+_G.ClickLinks_EnsureSetItemRefHook()
+
+-- (Optional) Keep the ItemRefTooltip hook as a secondary path for clients that call it directly.
 local OriginalSetHyperlink = ItemRefTooltip.SetHyperlink
 function ItemRefTooltip:SetHyperlink(link)
-    -- notes: Hook ItemRefTooltip hyperlink handler.
-    -- notes: Intercepts our custom "url:" hyperlinks and shows copy popup; otherwise passes through.
-    if link:match("^url:") then
+    if type(link) == "string" and link:match("^url:") then
         local u = link:sub(5)
         _AddToJournal(u)
         StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = u })
@@ -312,6 +377,7 @@ function ItemRefTooltip:SetHyperlink(link)
         OriginalSetHyperlink(self, link)
     end
 end
+
 
 -------------------------------------------------
 -- Automatic Version Check
