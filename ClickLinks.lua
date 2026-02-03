@@ -299,8 +299,6 @@ StaticPopupDialogs["CLICK_LINK_CLICKURL"] = {
     end,
 }
 
-local _AddToJournal -- forward declared (used by ItemRefTooltip hook)
-
 local _AddToJournal -- forward declared (used by URL hooks)
 
 --[[-------------------------------------------------------------------------
@@ -328,7 +326,7 @@ _G.ClickLinks_SetItemRef_Wrapper = _G.ClickLinks_SetItemRef_Wrapper or function(
     end
 
     if type(link) == "string" and link:match("^url:") then
-        local u = link:sub(5)
+        local u = link:sub(5):gsub("||", "|")
         _AddToJournal(u)
         StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = u })
         return
@@ -370,7 +368,7 @@ _G.ClickLinks_EnsureSetItemRefHook()
 local OriginalSetHyperlink = ItemRefTooltip.SetHyperlink
 function ItemRefTooltip:SetHyperlink(link)
     if type(link) == "string" and link:match("^url:") then
-        local u = link:sub(5)
+        local u = link:sub(5):gsub("||", "|")
         _AddToJournal(u)
         StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = u })
     else
@@ -457,7 +455,9 @@ local JournalFrame, JournalScrollChild, JournalButtons = nil, nil, nil
 local _UpdateJournalUI  -- forward declaration (used by _AddToJournal and journal actions)
 
 _AddToJournal = function(url)
-    url = tostring(url or ""):gsub("%s+$", ""):gsub("^%s+", "")
+    url = tostring(url or "")
+    url = url:gsub("||", "|")
+    url = url:gsub("%s+$", ""):gsub("^%s+", "")
     if url == "" then return end
 
     local j = ClickLinksDB.journal
@@ -714,8 +714,12 @@ local function VersionToNumber(ver)
     -- notes: Converts semantic X.Y.Z into an integer so versions can be compared numerically.
     -- notes: Example: 1.2.3 -> 10203 (via a*10000 + b*100 + c)
     local a, b, c = ver:match("(%d+)%.(%d+)%.(%d+)")
+    if not a then
+        a, b = ver:match("(%d+)%.(%d+)")
+        c = 0
+    end
     if not a then return 0 end
-    return a * 10000 + b * 100 + c
+    return tonumber(a) * 10000 + tonumber(b) * 100 + tonumber(c)
 end
 
 local localVerNum = VersionToNumber(localVersion)
