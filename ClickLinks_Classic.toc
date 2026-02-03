@@ -3,7 +3,7 @@
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 2.0.3
+## Version: 2.0.4
 ## SavedVariables: ClickLinksDB
 ## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga
 ## X-Locale: enUS

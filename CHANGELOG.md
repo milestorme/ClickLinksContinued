@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.4
+**Fixes**
+- Restored literal pipe characters in copied/stored URLs to avoid double-escaping.
+- Allowed two-part versions like 1.2 to compare correctly for update warnings.
+
 ## 2.0.3
 **Fixes**
 - Fixed ClickLinks copy popup not opening when ElvUI is enabled.
