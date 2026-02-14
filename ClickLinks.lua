@@ -66,13 +66,32 @@ local URL_PATTERNS = {
     "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d)%f[%D]"
 }
 
+local function _SplitTrailingURLPunctuation(url)
+    url = tostring(url or "")
+    local trailing = ""
+
+    -- Preserve common chat punctuation outside the clickable region.
+    while #url > 0 do
+        local c = url:sub(-1)
+        if c == "." or c == "," or c == ";" or c == ":" or c == "!" or c == "?" or c == ")" then
+            trailing = c .. trailing
+            url = url:sub(1, -2)
+        else
+            break
+        end
+    end
+
+    return url, trailing
+end
+
 local function formatURL(url)
     -- notes: Converts a raw URL string into a colored clickable hyperlink using the "url:" hyperlink type.
     -- notes: The ItemRefTooltip:SetHyperlink hook below intercepts "url:" to show the copy popup.
     -- notes: Escape "|" because it is a control character in WoW hyperlink formatting.
-    url = tostring(url or "")
+    local trailing
+    url, trailing = _SplitTrailingURLPunctuation(url)
     url = url:gsub("%|", "||")
-    return "|cff149bfd|Hurl:" .. url .. "|h[" .. url .. "]|h|r "
+    return "|cff149bfd|Hurl:" .. url .. "|h[" .. url .. "]|h|r" .. trailing
 end
 
 
@@ -104,10 +123,6 @@ local function _CL_SafeFind(s, pattern, plain)
     return nil
 end
 
-local function _CL_IsRuntimeDisabled()
-    return false
-end
-
 -------------------------------------------------
 -- Chat message filter
 -------------------------------------------------
@@ -118,10 +133,6 @@ local function makeClickable(self, event, msg, ...)
 
     -- If the line already contains hyperlinks (items/spells/etc), don't touch it.
     -- This avoids edge-case corruption and plays nicer with other chat addons.
-    if _CL_IsRuntimeDisabled() then
-        return false, msg, ...
-    end
-
     -- Retail 12.x can pass "secret" chat values that error on string methods.
     if not _CL_CanTreatAsString(msg) then
         return false, msg, ...
@@ -187,11 +198,6 @@ HookCommunitiesFramesForClickableURLs()
 
             local origAddMessage = cf.AddMessage
             cf.AddMessage = function(self, text, ...)
-                -- Auto-disable (and avoid "secret value" errors) in PvP instances if enabled.
-                if _CL_IsRuntimeDisabled() then
-                    return origAddMessage(self, text, ...)
-                end
-
                 if _CL_CanTreatAsString(text) then
                     -- Reuse the same safety rules as makeClickable:
                     -- 1) Do not touch existing hyperlinks
@@ -224,10 +230,6 @@ local function _TryHookMessageFrame(frame)
     frame.__ClickLinksHooked = true
     local origAddMessage = frame.AddMessage
     frame.AddMessage = function(self, msg, ...)
-        if _CL_IsRuntimeDisabled() then
-            return origAddMessage(self, msg, ...)
-        end
-
         if _CL_CanTreatAsString(msg) and not _CL_SafeFind(msg, "|H", true) then
             local ok, _, newMsg = _CL_SafeCall(makeClickable, self, "MESSAGE_FRAME_ADD_MESSAGE", msg, ...)
             if ok and newMsg then
@@ -372,7 +374,10 @@ function ItemRefTooltip:SetHyperlink(link)
         _AddToJournal(u)
         StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = u })
     else
-        OriginalSetHyperlink(self, link)
+        if type(OriginalSetHyperlink) == "function" then
+            local ok = pcall(OriginalSetHyperlink, self, link)
+            if ok then return end
+        end
     end
 end
 
@@ -596,11 +601,18 @@ _UpdateJournalUI = function()
                     local url = self._url
                     if not url then return end
                     if button == "RightButton" then
-                        -- remove the first matching entry (newest-first is fine)
-                        for k = #ClickLinksDB.journal, 1, -1 do
-                            if ClickLinksDB.journal[k] and ClickLinksDB.journal[k].url == url then
-                                table.remove(ClickLinksDB.journal, k)
-                                break
+                        local idxToRemove = self._journalIndex
+                        local entry = idxToRemove and ClickLinksDB.journal[idxToRemove]
+                        if entry and entry.url == self._url and entry.t == self._ts then
+                            table.remove(ClickLinksDB.journal, idxToRemove)
+                        else
+                            -- fallback for legacy rows/state drift
+                            for k = #ClickLinksDB.journal, 1, -1 do
+                                local e = ClickLinksDB.journal[k]
+                                if e and e.url == self._url and e.t == self._ts then
+                                    table.remove(ClickLinksDB.journal, k)
+                                    break
+                                end
                             end
                         end
                         _UpdateJournalUI()
@@ -617,6 +629,8 @@ _UpdateJournalUI = function()
             if #display > 300 then display = display:sub(1, 300) .. "..." end
 
             btn._url = entry.url
+            btn._ts = entry.t
+            btn._journalIndex = i
             btn.text:SetText((ts ~= "" and ("|cffaaaaaa" .. ts .. "|r  ") or "") .. "|cff00ccff" .. display .. "|r")
             btn:ClearAllPoints()
             btn:SetPoint("TOPLEFT", 0, -((idx - 1) * rowH))
@@ -713,6 +727,7 @@ localVersion = tostring(localVersion)
 local function VersionToNumber(ver)
     -- notes: Converts semantic X.Y.Z into an integer so versions can be compared numerically.
     -- notes: Example: 1.2.3 -> 10203 (via a*10000 + b*100 + c)
+    ver = tostring(ver or "")
     local a, b, c = ver:match("(%d+)%.(%d+)%.(%d+)")
     if not a then
         a, b = ver:match("(%d+)%.(%d+)")
@@ -724,8 +739,13 @@ end
 
 local localVerNum = VersionToNumber(localVersion)
 
+local _CL_RegisterAddonMessagePrefix = (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) or RegisterAddonMessagePrefix
+local _CL_SendAddonMessage = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
+
 -- notes: Must register prefix before sending/receiving addon messages.
-C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
+if type(_CL_RegisterAddonMessagePrefix) == "function" then
+    _CL_RegisterAddonMessagePrefix(PREFIX)
+end
 
 local f = CreateFrame("Frame")
 -- notes: PLAYER_LOGIN = initial broadcast; GROUP_ROSTER_UPDATE = broadcast when joining a group; CHAT_MSG_ADDON = receive versions.
@@ -740,13 +760,17 @@ local function SendVersionToGroup()
     -- notes: Broadcasts version to:
     -- notes: - GUILD (always when in guild)
     -- notes: - PARTY/RAID (only once per group session)
+    if type(_CL_SendAddonMessage) ~= "function" then
+        return
+    end
+
     if IsInGuild() then
-        C_ChatInfo.SendAddonMessage(PREFIX, localVersion, "GUILD")
+        _CL_SendAddonMessage(PREFIX, localVersion, "GUILD")
     end
     if IsInRaid() or IsInGroup() then
         if not sentVersionThisGroup then
             local channel = IsInRaid() and "RAID" or "PARTY"
-            C_ChatInfo.SendAddonMessage(PREFIX, localVersion, channel)
+            _CL_SendAddonMessage(PREFIX, localVersion, channel)
             sentVersionThisGroup = true
         end
     end
