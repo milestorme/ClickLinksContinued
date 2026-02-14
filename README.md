@@ -17,6 +17,7 @@ Maintained fork with modern API support, multi-client compatibility, and an opti
 /cl journal — Toggle Journal
 /cl minimap — Toggle minimap button
 /cl version — Print version
+/cl help - Print commands list
 
 ## SavedVariables
 ClickLinksDB
