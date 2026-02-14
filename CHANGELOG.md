@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.5
+**Fixes**
+- Added addon-message API compatibility fallbacks for cross-client version sync.
+- Hardened version parsing for malformed/non-string addon payloads.
+- Trimmed trailing punctuation from clickable URL payloads while preserving visible punctuation in chat.
+- Added defensive fallback handling when delegating non-URL hyperlink clicks.
+- Simplified chat/message hooks by removing dead runtime-disable branches.
+- Made journal right-click deletion deterministic by row identity (index+timestamp+url).
+
 ## 2.0.4
 **Fixes**
 - Restored literal pipe characters in copied/stored URLs to avoid double-escaping.
