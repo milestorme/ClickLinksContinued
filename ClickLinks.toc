@@ -3,7 +3,7 @@
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 2.0.5
+## Version: 2.0.6
 ## SavedVariables: ClickLinksDB
 ## Category: Chat
 ## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga

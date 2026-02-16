@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.0.6
+
+### Added
+- Support for bare domains (e.g. `google.com`) to automatically convert into clickable links.
+- Expanded chat filter coverage to include all known `CHAT_MSG_*` events across Classic → Retail.
+- Safe cross-client chat filter registration using `pcall` to prevent missing-event errors.
+
+### Fixed
+- Ensured `ClickLinksDB` is safely initialized before copy box positioning logic.
+- Minor pattern detection correction for `www.` pre-check.
+
+### Changed
+- Reworked URL copy popup to match KillOnSight-style draggable copy box (auto-focus + preselected text)
+- Copy popup now uses tooltip-style backdrop for solid, consistent background
+- Improved frame layering (`DIALOG` strata) to ensure popup appears above UI elements
+- Standardized backdrop tiling to match addon visual style
+
+### Improved
+- Removed forced re-highlight on text change (prevents cursor lock issues)
+- Removed auto-hide on focus loss (prevents popup closing while dragging)
+- Added close button to copy popup for better UX
+- Hardened chat hook initialization to prevent potential nil-call errors
+- Copy popup position now persists across reloads and logout
+- Minor internal cleanup for stability and consistency
+- Improved trailing punctuation handling for URLs (now excludes accidental quotes and brackets)
+- Journal now prevents duplicate entries:
+  - Clicking an already-saved URL removes the old entry and re-adds it as the newest.
+- Re-registers chat filters on login for improved compatibility with UI mods.
+- Strengthened string safety checks for Retail 12.x "secret" chat values.
+- Improved `www.` detection pre-check consistency.
+
+### Internal
+- Minor hook safety adjustments for load-order stability
+
 ## 2.0.5
 **Fixes**
 - Added addon-message API compatibility fallbacks for cross-client version sync.

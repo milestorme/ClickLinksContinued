@@ -42,38 +42,52 @@ local L = LibStub("AceLocale-3.0"):GetLocale("ClickLinks")
 -- notes: Patterns used to detect URLs/emails/IPs in chat text. Each match is replaced with a clickable hyperlink.
 local URL_PATTERNS = {
     -- X://Y most urls
-    "^(%a[%w+.-]+://%S+)",
-    "%f[%S](%a[%w+.-]+://%S+)",
+    "^(%a[%w+.-]+://[^%s|]+)",
+    "%f[%S](%a[%w+.-]+://[^%s|]+)",
     -- www.X.Y domain and path
-    "^(www%.[-%w_%%]+%.(%a%a+)/%S+)",
-    "%f[%S](www%.[-%w_%%]+%.(%a%a+)/%S+)",
+    "^(www%.[-%w_%%]+%.(%a%a+)/[^%s|]+)",
+    "%f[%S](www%.[-%w_%%]+%.(%a%a+)/[^%s|]+)",
     -- www.X.Y domain
     "^(www%.[-%w_%%]+%.(%a%a+))",
     "%f[%S](www%.[-%w_%%]+%.(%a%a+))",
+    -- domain.tld/path (no scheme/www)
+    "^(%w[%w%._-]+%.(%a%a+)/[^%s|]+)",
+    "%f[%S](%w[%w%._-]+%.(%a%a+)/[^%s|]+)",
+    -- domain.tld (no scheme/www)
+    "^(%w[%w%._-]+%.(%a%a+))",
+    "%f[%S](%w[%w%._-]+%.(%a%a+))",
     -- email
     "(%S+@[%w_.-%%]+%.(%a%a+))",
     -- ip address with port and path
-    "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d/%S+)",
-    "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d/%S+)",
+    "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d/[^%s|]+)",
+    "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d/[^%s|]+)",
     -- ip address with port
     "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d)%f[%D]",
     "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d)%f[%D]",
     -- ip address with path
-    "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%/%S+)",
-    "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%/%S+)",
+    "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%/[^%s|]+)",
+    "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%/[^%s|]+)",
     -- ip address
     "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d)%f[%D]",
     "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d)%f[%D]"
+}
+
+-- Characters commonly appended after URLs that should not be clickable
+local URL_TRAILING = {
+    ["."] = true, [","] = true, [";"] = true, [":"] = true,
+    ["!"] = true, ["?"] = true, [")"] = true,
+    ["\""] = true, ["'"] = true,
+    ["]"] = true, ["}"] = true,
 }
 
 local function _SplitTrailingURLPunctuation(url)
     url = tostring(url or "")
     local trailing = ""
 
-    -- Preserve common chat punctuation outside the clickable region.
+
     while #url > 0 do
         local c = url:sub(-1)
-        if c == "." or c == "," or c == ";" or c == ":" or c == "!" or c == "?" or c == ")" then
+        if URL_TRAILING[c] then
             trailing = c .. trailing
             url = url:sub(1, -2)
         else
@@ -83,6 +97,7 @@ local function _SplitTrailingURLPunctuation(url)
 
     return url, trailing
 end
+
 
 local function formatURL(url)
     -- notes: Converts a raw URL string into a colored clickable hyperlink using the "url:" hyperlink type.
@@ -143,14 +158,16 @@ local function makeClickable(self, event, msg, ...)
         return false, msg, ...
     end
 
-    -- Quick pre-check to avoid unnecessary gsub
-    if not (_CL_SafeFind(msg, "://", true)
-        or _CL_SafeFind(msg, "www%.")
-        or _CL_SafeFind(msg, "@", true)
-        or _CL_SafeFind(msg, "%d+%.%d+%.%d+%.%d+"))
-    then
-        return false, msg, ...
-    end
+	-- Quick pre-check to avoid unnecessary gsub
+	-- Include bare domains like google.com (no scheme/www)
+	if not (_CL_SafeFind(msg, "://", true)
+		or _CL_SafeFind(msg, "www%.", true)
+		or _CL_SafeFind(msg, "@", true)
+		or _CL_SafeFind(msg, "%d+%.%d+%.%d+%.%d+")
+		or _CL_SafeFind(msg, "%f[%w][%w%._-]+%.[%a][%a]+%f[%W]"))
+	then
+		return false, msg, ...
+	end
 
 
     local ok, newMsg = _CL_SafeCall(function(m)
@@ -165,20 +182,55 @@ local function makeClickable(self, event, msg, ...)
     return false, msg, ...
 end
 
-local CHAT_TYPES = {
-    -- notes: Chat event suffixes to attach the filter to. "SYSTEM" included for system messages too.
-    "AFK","BATTLEGROUND_LEADER","BATTLEGROUND","BN_WHISPER","BN_WHISPER_INFORM",
-    "CHANNEL","COMMUNITIES_CHANNEL","DND","EMOTE","GUILD","OFFICER",
-    "PARTY_LEADER","PARTY",
-    "INSTANCE_CHAT_LEADER","INSTANCE_CHAT",
-    "RAID_LEADER","RAID_WARNING","RAID",
-    "SAY","WHISPER","WHISPER_INFORM","YELL","SYSTEM"
+local CHAT_EVENT_SUFFIXES = {
+    -- Core chat
+    "SAY","YELL","EMOTE",
+    "WHISPER","WHISPER_INFORM",
+    "GUILD","OFFICER",
+    "PARTY","PARTY_LEADER",
+    "RAID","RAID_LEADER","RAID_WARNING",
+    "INSTANCE_CHAT","INSTANCE_CHAT_LEADER",
+    "CHANNEL",
+
+    -- Status variants
+    "AFK","DND",
+
+    -- Battleground / PvP
+    "BATTLEGROUND","BATTLEGROUND_LEADER",
+
+    -- System + misc feeds that often contain URLs via addons/MOTD/etc
+    "SYSTEM",
+    "LOOT","MONEY","CURRENCY",
+    "SKILL","TRADESKILLS",
+    "COMBAT_XP_GAIN","COMBAT_HONOR_GAIN","COMBAT_FACTION_CHANGE",
+    "ACHIEVEMENT","GUILD_ACHIEVEMENT",
+
+    -- Battle.net (Retail / sometimes backported)
+    "BN_WHISPER","BN_WHISPER_INFORM",
+    "BN_CONVERSATION","BN_CONVERSATION_NOTICE","BN_CONVERSATION_LIST",
+    "BN_INLINE_TOAST_ALERT",
+    "BN_INLINE_TOAST_BROADCAST","BN_INLINE_TOAST_BROADCAST_INFORM",
+    "BN_INLINE_TOAST_CONVERSATION","BN_INLINE_TOAST_CONVERSATION_INFORM",
+
+    -- Communities / cross-realm social (Retail)
+    "COMMUNITIES_CHANNEL",
+    "CLUB",
+    "CLUB_MEMBER_UPDATED","CLUB_MEMBER_ADDED","CLUB_MEMBER_REMOVED",
+    "CLUB_STREAMS_LOADED","CLUB_STREAM_MESSAGE",
+
+    -- Pet battle (Retail)
+    "PET_BATTLE_INFO",
 }
 
-for _, chatType in ipairs(CHAT_TYPES) do
-    -- notes: Registers message filter for each chat channel/event type.
-    ChatFrame_AddMessageEventFilter("CHAT_MSG_" .. chatType, makeClickable)
+local function _CL_RegisterAllChatFilters()
+    for _, suffix in ipairs(CHAT_EVENT_SUFFIXES) do
+        local ev = "CHAT_MSG_" .. suffix
+        -- Some events don't exist on some clients; pcall keeps it clean.
+        pcall(ChatFrame_AddMessageEventFilter, ev, makeClickable)
+    end
 end
+
+_CL_RegisterAllChatFilters()
 
 
 -------------------------------------------------
@@ -188,16 +240,18 @@ end
 -- notes: and do NOT go through CHAT_MSG_* filters. We wrap AddMessage to catch those too.
 local HookCommunitiesFramesForClickableURLs -- forward declare (used before definition)
 local function HookChatFramesForClickableURLs()
-HookCommunitiesFramesForClickableURLs()
+    if HookCommunitiesFramesForClickableURLs then
+        HookCommunitiesFramesForClickableURLs()
+    end
     if not _G.ChatFrame1 then return end
 
     for i = 1, (NUM_CHAT_WINDOWS or 0) do
         local cf = _G["ChatFrame" .. i]
-        if cf and not cf.__ClickLinksHooked then
-            cf.__ClickLinksHooked = true
-
-            local origAddMessage = cf.AddMessage
-            cf.AddMessage = function(self, text, ...)
+        if cf and type(cf.AddMessage) == "function" then
+            -- If another addon replaced AddMessage after our hook, re-hook safely.
+            if cf.AddMessage ~= cf.__ClickLinks_WrappedAddMessage then
+                cf.__ClickLinks_OrigAddMessage = cf.AddMessage
+                cf.__ClickLinks_WrappedAddMessage = function(self, text, ...)
                 if _CL_CanTreatAsString(text) then
                     -- Reuse the same safety rules as makeClickable:
                     -- 1) Do not touch existing hyperlinks
@@ -210,7 +264,11 @@ HookCommunitiesFramesForClickableURLs()
                         end
                     end
                 end
-                return origAddMessage(self, text, ...)
+                    local orig = self.__ClickLinks_OrigAddMessage
+                    return orig(self, text, ...)
+                end
+
+                cf.AddMessage = cf.__ClickLinks_WrappedAddMessage
             end
         end
     end
@@ -224,20 +282,24 @@ end
 -- go through CHAT_MSG_* filters or ChatFrame:AddMessage. We hook its AddMessage too.
 
 local function _TryHookMessageFrame(frame)
-    if not frame or frame.__ClickLinksHooked then return end
     if type(frame.AddMessage) ~= "function" then return end
 
-    frame.__ClickLinksHooked = true
-    local origAddMessage = frame.AddMessage
-    frame.AddMessage = function(self, msg, ...)
+    -- If another addon/UI code replaces AddMessage later, re-hook safely.
+    if frame.AddMessage == frame.__ClickLinks_WrappedAddMessage then return end
+
+    frame.__ClickLinks_OrigAddMessage = frame.AddMessage
+    frame.__ClickLinks_WrappedAddMessage = function(self, msg, ...)
         if _CL_CanTreatAsString(msg) and not _CL_SafeFind(msg, "|H", true) then
             local ok, _, newMsg = _CL_SafeCall(makeClickable, self, "MESSAGE_FRAME_ADD_MESSAGE", msg, ...)
             if ok and newMsg then
                 msg = newMsg
             end
         end
-        return origAddMessage(self, msg, ...)
+        local orig = self.__ClickLinks_OrigAddMessage
+        return orig(self, msg, ...)
     end
+
+    frame.AddMessage = frame.__ClickLinks_WrappedAddMessage
 end
 
 HookCommunitiesFramesForClickableURLs = function()
@@ -259,12 +321,32 @@ end
 
 -- Try immediately (addon load), and also after login in case chat frames are not fully built yet.
 HookChatFramesForClickableURLs()
+
+-- Re-hook safety: some UI mods replace ChatFrame:AddMessage after login.
+-- We do a short-lived ticker after login to re-apply our hooks if needed.
+local __clRehookTicker
+local function _CL_StartRehookTicker()
+    if __clRehookTicker then return end
+    if not (C_Timer and C_Timer.NewTicker) then return end
+    local ticks = 0
+    __clRehookTicker = C_Timer.NewTicker(5, function()
+        ticks = ticks + 1
+        HookChatFramesForClickableURLs()
+        HookCommunitiesFramesForClickableURLs()
+        if _G.ClickLinks_EnsureSetItemRefHook then _G.ClickLinks_EnsureSetItemRefHook() end
+        if ticks >= 12 then -- ~60 seconds
+            __clRehookTicker:Cancel()
+            __clRehookTicker = nil
+        end
+    end)
+end
 local __clHookFrame = CreateFrame("Frame")
 __clHookFrame:RegisterEvent("PLAYER_LOGIN")
 __clHookFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 __clHookFrame:RegisterEvent("ADDON_LOADED")
 __clHookFrame:SetScript("OnEvent", function(_, event, addonName)
     HookChatFramesForClickableURLs()
+	if event == "PLAYER_LOGIN" then _CL_RegisterAllChatFilters(); _CL_StartRehookTicker() end
     if _G.ClickLinks_EnsureSetItemRefHook then _G.ClickLinks_EnsureSetItemRefHook() end
     -- Communities/Guild UI is loaded on-demand on Retail
     if event == "ADDON_LOADED" then
@@ -277,29 +359,99 @@ __clHookFrame:SetScript("OnEvent", function(_, event, addonName)
 end)
 
 -------------------------------------------------
--- StaticPopup for copying URLs
+-- Copy popup
 -------------------------------------------------
--- notes: Popup with editbox: user can Ctrl+C the URL.
-StaticPopupDialogs["CLICK_LINK_CLICKURL"] = {
-    text = L["COPYBOX_HINT"],
-    button1 = CLOSE,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-    hasEditBox = true,
+-- notes:
+--   WoW addons cannot write to the OS clipboard. We show a small edit box with the URL
+--   selected and focused so the user can press Ctrl+C.
 
-    OnShow = function(self)
-        -- notes: When shown, loads URL into the edit box, highlights it, and focuses for quick copy.
-        local editBox = _G[self:GetName() .. "EditBox"]
-        editBox:SetText("")
-        if self.data and self.data.url then
-            editBox:SetText(self.data.url)
-            editBox:HighlightText()
-            editBox:SetFocus()
+local function _CL_EnsureCopyBox()
+    ClickLinksDB = ClickLinksDB or {}
+    if _G.ClickLinks_CopyBox and _G.ClickLinks_CopyBox.editBox then return _G.ClickLinks_CopyBox end
+
+    local template = (BackdropTemplateMixin and "BackdropTemplate") or nil
+    local f = CreateFrame("Frame", "ClickLinks_CopyBox", UIParent, template)
+    f:SetFrameStrata("DIALOG")
+    f:SetSize(420, 70)
+    if ClickLinksDB.copyBoxPos and type(ClickLinksDB.copyBoxPos.x) == "number" then
+        f:SetPoint(
+            ClickLinksDB.copyBoxPos.point,
+            UIParent,
+            ClickLinksDB.copyBoxPos.relativePoint,
+            ClickLinksDB.copyBoxPos.x,
+            ClickLinksDB.copyBoxPos.y
+        )
+    else
+        f:SetPoint("CENTER")
+    end
+    f:Hide()
+    f:SetClampedToScreen(true)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", function() f:StartMoving() end)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+
+        local point, _, relativePoint, x, y = self:GetPoint()
+        ClickLinksDB.copyBoxPos = {
+            point = point,
+            relativePoint = relativePoint,
+            x = x,
+            y = y,
+        }
+    end)
+
+    if f.SetBackdrop then
+        f:SetBackdrop({
+			bgFile   = "Interface/Tooltips/UI-Tooltip-Background",
+			edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+		f:SetBackdropColor(0, 0, 0, 0.95)   -- solid dark background
+		f:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    end
+
+    local title = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    title:SetPoint("TOP", 0, -10)
+    title:SetText(L["COPYBOX_TITLE"] or "Copy Link")
+
+    local hint = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    hint:SetPoint("BOTTOM", 0, 10)
+    hint:SetText(L["COPYBOX_HINT"] or "Press Ctrl+C to copy link")
+	
+    -- Don't auto-hide on focus loss (dragging/clicking can steal focus)
+    -- Don't re-highlight on every change (prevents cursor placement)
+	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+	close:SetPoint("TOPRIGHT", -2, -2)
+
+    local eb = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    eb:SetAutoFocus(true)
+    eb:SetSize(380, 24)
+    eb:SetPoint("CENTER", 0, -2)
+    eb:SetScript("OnEscapePressed", function() f:Hide() end)
+    eb:SetScript("OnEnterPressed", function() f:Hide() end)
+	
+    f.editBox = eb
+    return f
+end
+
+local function _CL_ShowCopyBox(text)
+    local f = _CL_EnsureCopyBox()
+    if not f or not f.editBox then return end
+    f:Show()
+    f.editBox:SetText(text or "")
+    -- Slight delay ensures focus isn't stolen by other UI hooks
+    C_Timer.After(0, function()
+        if f:IsShown() and f.editBox then
+            f.editBox:SetFocus()
+            f.editBox:HighlightText()
         end
-    end,
-}
+    end)
+end
 
 local _AddToJournal -- forward declared (used by URL hooks)
 
@@ -330,7 +482,7 @@ _G.ClickLinks_SetItemRef_Wrapper = _G.ClickLinks_SetItemRef_Wrapper or function(
     if type(link) == "string" and link:match("^url:") then
         local u = link:sub(5):gsub("||", "|")
         _AddToJournal(u)
-        StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = u })
+        _CL_ShowCopyBox(u)
         return
     end
 
@@ -372,7 +524,7 @@ function ItemRefTooltip:SetHyperlink(link)
     if type(link) == "string" and link:match("^url:") then
         local u = link:sub(5):gsub("||", "|")
         _AddToJournal(u)
-        StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = u })
+        _CL_ShowCopyBox(u)
     else
         if type(OriginalSetHyperlink) == "function" then
             local ok = pcall(OriginalSetHyperlink, self, link)
@@ -401,6 +553,7 @@ ClickLinksDB = ClickLinksDB or { warned = false }
 ClickLinksDB.journal = ClickLinksDB.journal or {}
 ClickLinksDB.journalMax = ClickLinksDB.journalMax or 200
 ClickLinksDB.minimap = ClickLinksDB.minimap or { hide = false, angle = 220 }
+ClickLinksDB.copyBoxPos = ClickLinksDB.copyBoxPos or nil
 
 -- ---- Journal data normalization ----
 -- notes:
@@ -465,11 +618,16 @@ _AddToJournal = function(url)
     url = url:gsub("%s+$", ""):gsub("^%s+", "")
     if url == "" then return end
 
+    -- Ensure journal is a clean array, then de-dup:
+    -- If the URL already exists, remove old entry and re-add to newest (top of UI).
+    _NormalizeJournal()
     local j = ClickLinksDB.journal
-    local last = j[#j]
-    if last and last.url == url then
-        last.t = time()
-        return
+
+    for k = #j, 1, -1 do
+        local e = j[k]
+        if e and e.url == url then
+            table.remove(j, k)
+        end
     end
 
     j[#j + 1] = { url = url, t = time() }
@@ -478,6 +636,7 @@ _AddToJournal = function(url)
         _UpdateJournalUI()
     end
 end
+
 
 -- ---- Journal UI ----
 -- (JournalFrame locals were forward-declared above so _AddToJournal can refresh the list live)
@@ -617,7 +776,7 @@ _UpdateJournalUI = function()
                         end
                         _UpdateJournalUI()
                     else
-                        StaticPopup_Show("CLICK_LINK_CLICKURL", nil, nil, { url = url })
+                        _CL_ShowCopyBox(url)
                     end
                 end)
 
