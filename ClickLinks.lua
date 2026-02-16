@@ -99,15 +99,60 @@ local function _SplitTrailingURLPunctuation(url)
 end
 
 
+-------------------------------------------------
+-- Bare domain TLD whitelist (prevents false positives)
+-------------------------------------------------
+local ALLOWED_TLDS = {
+    com = true, net = true, org = true,
+    io = true, gg = true, co = true,
+    au = true, uk = true, us = true, nz = true, ca = true,
+    de = true, fr = true, jp = true, kr = true,
+}
+
+local function _CL_IsAllowedTLD(domain)
+    local tld = domain:match("%.([%a][%a]+)$")
+    if not tld then return false end
+    return ALLOWED_TLDS[string.lower(tld)] == true
+end
+
+
 local function formatURL(url)
-    -- notes: Converts a raw URL string into a colored clickable hyperlink using the "url:" hyperlink type.
-    -- notes: The ItemRefTooltip:SetHyperlink hook below intercepts "url:" to show the copy popup.
-    -- notes: Escape "|" because it is a control character in WoW hyperlink formatting.
     local trailing
     url, trailing = _SplitTrailingURLPunctuation(url)
+
+    -- If this is a bare domain (no scheme, no www), enforce TLD whitelist
+    if not string.find(url, "://", 1, true)
+        and not string.find(url, "www.", 1, true)
+    then
+        if not _CL_IsAllowedTLD(url) then
+            return url .. trailing
+        end
+    end
+
     url = url:gsub("%|", "||")
     return "|cff149bfd|Hurl:" .. url .. "|h[" .. url .. "]|h|r" .. trailing
 end
+
+
+
+
+local function formatURL(url)
+    local trailing
+    url, trailing = _SplitTrailingURLPunctuation(url)
+
+    -- If this is a bare domain (no scheme, no www), enforce TLD whitelist
+    if not string.find(url, "://", 1, true)
+        and not string.find(url, "www.", 1, true)
+    then
+        if not _CL_IsAllowedTLD(url) then
+            return url .. trailing
+        end
+    end
+
+    url = url:gsub("%|", "||")
+    return "|cff149bfd|Hurl:" .. url .. "|h[" .. url .. "]|h|r" .. trailing
+end
+
 
 
 -- ------------------------------------------------
@@ -135,6 +180,15 @@ local function _CL_SafeFind(s, pattern, plain)
         return string.find(str, pat, 1, isPlain)
     end, s, pattern, plain == true)
     if ok then return idx end
+
+local function _CL_SafeMatch(s, pattern)
+    local ok, a, b, c, d = _CL_SafeCall(function(str, pat)
+        return string.match(str, pat)
+    end, s, pattern)
+    if ok then return a, b, c, d end
+    return nil
+end
+
     return nil
 end
 
@@ -158,16 +212,21 @@ local function makeClickable(self, event, msg, ...)
         return false, msg, ...
     end
 
-	-- Quick pre-check to avoid unnecessary gsub
-	-- Include bare domains like google.com (no scheme/www)
-	if not (_CL_SafeFind(msg, "://", true)
-		or _CL_SafeFind(msg, "www%.", true)
-		or _CL_SafeFind(msg, "@", true)
-		or _CL_SafeFind(msg, "%d+%.%d+%.%d+%.%d+")
-		or _CL_SafeFind(msg, "%f[%w][%w%._-]+%.[%a][%a]+%f[%W]"))
-	then
-		return false, msg, ...
-	end
+    
+    
+    -- Quick pre-check to avoid unnecessary gsub
+    -- We include a literal '.' trigger so bare domains like google.com are processed.
+    -- False positives are prevented by the TLD whitelist inside formatURL().
+    if not (_CL_SafeFind(msg, "://", true)
+        or _CL_SafeFind(msg, "www%.", true)
+        or _CL_SafeFind(msg, "@", true)
+        or _CL_SafeFind(msg, "%d+%.%d+%.%d+%.%d+")
+        or _CL_SafeFind(msg, ".", true)) -- bare domains like google.com
+    then
+        return false, msg, ...
+    end
+
+
 
 
     local ok, newMsg = _CL_SafeCall(function(m)
@@ -182,8 +241,11 @@ local function makeClickable(self, event, msg, ...)
     return false, msg, ...
 end
 
+
+-------------------------------------------------
+-- Chat Filtering: Register on all known chat events (cross-client safe)
+-------------------------------------------------
 local CHAT_EVENT_SUFFIXES = {
-    -- Core chat
     "SAY","YELL","EMOTE",
     "WHISPER","WHISPER_INFORM",
     "GUILD","OFFICER",
@@ -191,46 +253,34 @@ local CHAT_EVENT_SUFFIXES = {
     "RAID","RAID_LEADER","RAID_WARNING",
     "INSTANCE_CHAT","INSTANCE_CHAT_LEADER",
     "CHANNEL",
-
-    -- Status variants
     "AFK","DND",
-
-    -- Battleground / PvP
     "BATTLEGROUND","BATTLEGROUND_LEADER",
-
-    -- System + misc feeds that often contain URLs via addons/MOTD/etc
     "SYSTEM",
     "LOOT","MONEY","CURRENCY",
     "SKILL","TRADESKILLS",
     "COMBAT_XP_GAIN","COMBAT_HONOR_GAIN","COMBAT_FACTION_CHANGE",
     "ACHIEVEMENT","GUILD_ACHIEVEMENT",
-
-    -- Battle.net (Retail / sometimes backported)
     "BN_WHISPER","BN_WHISPER_INFORM",
     "BN_CONVERSATION","BN_CONVERSATION_NOTICE","BN_CONVERSATION_LIST",
     "BN_INLINE_TOAST_ALERT",
     "BN_INLINE_TOAST_BROADCAST","BN_INLINE_TOAST_BROADCAST_INFORM",
     "BN_INLINE_TOAST_CONVERSATION","BN_INLINE_TOAST_CONVERSATION_INFORM",
-
-    -- Communities / cross-realm social (Retail)
     "COMMUNITIES_CHANNEL",
     "CLUB",
     "CLUB_MEMBER_UPDATED","CLUB_MEMBER_ADDED","CLUB_MEMBER_REMOVED",
     "CLUB_STREAMS_LOADED","CLUB_STREAM_MESSAGE",
-
-    -- Pet battle (Retail)
     "PET_BATTLE_INFO",
 }
 
 local function _CL_RegisterAllChatFilters()
     for _, suffix in ipairs(CHAT_EVENT_SUFFIXES) do
         local ev = "CHAT_MSG_" .. suffix
-        -- Some events don't exist on some clients; pcall keeps it clean.
         pcall(ChatFrame_AddMessageEventFilter, ev, makeClickable)
     end
 end
 
 _CL_RegisterAllChatFilters()
+
 
 
 -------------------------------------------------
@@ -346,7 +396,7 @@ __clHookFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 __clHookFrame:RegisterEvent("ADDON_LOADED")
 __clHookFrame:SetScript("OnEvent", function(_, event, addonName)
     HookChatFramesForClickableURLs()
-	if event == "PLAYER_LOGIN" then _CL_RegisterAllChatFilters(); _CL_StartRehookTicker() end
+	if event == "PLAYER_LOGIN" then _CL_StartRehookTicker() end
     if _G.ClickLinks_EnsureSetItemRefHook then _G.ClickLinks_EnsureSetItemRefHook() end
     -- Communities/Guild UI is loaded on-demand on Retail
     if event == "ADDON_LOADED" then
@@ -618,15 +668,13 @@ _AddToJournal = function(url)
     url = url:gsub("%s+$", ""):gsub("^%s+", "")
     if url == "" then return end
 
-    -- Ensure journal is a clean array, then de-dup:
-    -- If the URL already exists, remove old entry and re-add to newest (top of UI).
-    _NormalizeJournal()
     local j = ClickLinksDB.journal
 
-    for k = #j, 1, -1 do
-        local e = j[k]
+    -- De-duplicate: if URL already exists anywhere, remove old entry(ies) and re-add as newest.
+    for i = #j, 1, -1 do
+        local e = j[i]
         if e and e.url == url then
-            table.remove(j, k)
+            table.remove(j, i)
         end
     end
 
@@ -636,7 +684,6 @@ _AddToJournal = function(url)
         _UpdateJournalUI()
     end
 end
-
 
 -- ---- Journal UI ----
 -- (JournalFrame locals were forward-declared above so _AddToJournal can refresh the list live)

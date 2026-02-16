@@ -2,14 +2,14 @@
 
 ## 2.0.6
 
+### Fixed
+- Ensured `ClickLinksDB` is safely initialized before copy box positioning logic.
+- Minor pattern detection correction for `www.` pre-check.
+
 ### Added
 - Support for bare domains (e.g. `google.com`) to automatically convert into clickable links.
 - Expanded chat filter coverage to include all known `CHAT_MSG_*` events across Classic → Retail.
 - Safe cross-client chat filter registration using `pcall` to prevent missing-event errors.
-
-### Fixed
-- Ensured `ClickLinksDB` is safely initialized before copy box positioning logic.
-- Minor pattern detection correction for `www.` pre-check.
 
 ### Changed
 - Reworked URL copy popup to match KillOnSight-style draggable copy box (auto-focus + preselected text)
