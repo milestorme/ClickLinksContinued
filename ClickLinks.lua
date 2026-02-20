@@ -200,6 +200,22 @@ local function makeClickable(self, event, msg, ...)
     -- notes: Performs a cheap pre-check, then gsubs all URL patterns into clickable links.
     -- notes: Returns (false, msg, ...) so the message continues through normal rendering.
 
+    -- ElvUI has its own URL filter (CH:FindURL) that also produces |Hurl: links.
+    -- If both run on the same message, ElvUI re-processes ClickLinks' already-formatted
+    -- |Hurl: text, matching www. patterns inside it twice and producing garbage like
+    -- |Hurl:[[www.test.com]www.test.com[www.test.com]].
+    -- When ElvUI is active and its URL feature is enabled (the default), let ElvUI handle
+    -- formatting entirely. ClickLinks' SetItemRef copy-box hook still fires on the
+    -- resulting |Hurl: links, so copy-on-click continues to work.
+    if _G.ElvUI then
+        local E = _G.ElvUI[1]
+        local CH = E and E.GetModule and E:GetModule("Chat", true)
+        -- CH.db.url defaults to true; skip unless the user has explicitly disabled it in ElvUI
+        if not (CH and CH.db and CH.db.url == false) then
+            return false, msg, ...
+        end
+    end
+
     -- If the line already contains hyperlinks (items/spells/etc), don't touch it.
     -- This avoids edge-case corruption and plays nicer with other chat addons.
     -- Retail 12.x can pass "secret" chat values that error on string methods.
@@ -288,8 +304,15 @@ _CL_RegisterAllChatFilters()
 -------------------------------------------------
 -- notes: Some messages (guild MOTD, addon prints, certain system lines) are written directly via ChatFrame:AddMessage
 -- notes: and do NOT go through CHAT_MSG_* filters. We wrap AddMessage to catch those too.
+-- notes: ElvUI replaces the ChatFrame system but correctly passes messages through CHAT_MSG_* filters,
+-- notes: so the AddMessage hook is not needed (and causes triple-message display) when ElvUI is active.
+local function _CL_IsElvUIActive()
+    return _G.ElvUI ~= nil
+end
+
 local HookCommunitiesFramesForClickableURLs -- forward declare (used before definition)
 local function HookChatFramesForClickableURLs()
+    if _CL_IsElvUIActive() then return end
     if HookCommunitiesFramesForClickableURLs then
         HookCommunitiesFramesForClickableURLs()
     end
@@ -332,6 +355,7 @@ end
 -- go through CHAT_MSG_* filters or ChatFrame:AddMessage. We hook its AddMessage too.
 
 local function _TryHookMessageFrame(frame)
+    if _CL_IsElvUIActive() then return end
     if type(frame.AddMessage) ~= "function" then return end
 
     -- If another addon/UI code replaces AddMessage later, re-hook safely.
@@ -551,6 +575,27 @@ _G.ClickLinks_SetItemRef_Wrapper = _G.ClickLinks_SetItemRef_Wrapper or function(
 end
 
 _G.ClickLinks_EnsureSetItemRefHook = function()
+    -- On modern clients, avoid overriding the global SetItemRef entirely.
+    -- Overriding can taint the chat popup menu flow and break protected clipboard actions (Copy Character Name).
+    if _G.hooksecurefunc then
+        if _G.__ClickLinks_SetItemRefHooked then
+            return
+        end
+
+        _G.__ClickLinks_SetItemRefHooked = true
+
+        hooksecurefunc("SetItemRef", function(link, text, button, chatFrame)
+            if type(link) == "string" and link:match("^url:") then
+                local u = link:sub(5):gsub("||", "|")
+                _AddToJournal(u)
+                _CL_ShowCopyBox(u)
+            end
+        end)
+
+        return
+    end
+
+    -- Legacy fallback (no hooksecurefunc): keep the previous wrapper swap logic.
     local current = _G.SetItemRef
     if current == _G.ClickLinks_SetItemRef_Wrapper then
         return

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.8
+
+### Fixed
+- ElvUI: fix links appearing 3x in chat with only the first clickable 
+
+## 2.0.7
+
+### Fixed
+- Resolved `ADDON_ACTION_FORBIDDEN` error when using **Copy Character Name** from chat.
+- Replaced global `SetItemRef` override with secure `hooksecurefunc` to prevent Blizzard UI taint.
+- Eliminated unintended interaction with protected `CopyToClipboard()` calls.
+
 ## 2.0.6
 
 ### Fixed
