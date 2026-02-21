@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Prevented Communities/Guild frame candidate iteration from stopping early when intermediate frame paths are missing, so fallback message frames are still discovered for URL hooking.
+- Isolated Communities/Guild hook probing behind a protected call path so login-time chat `AddMessage` hooks (including Guild MOTD URL clickability) continue initializing even if Communities UI frames are not ready yet.
+
 ## 2.0.9
 — Duplicate formatURL()
 — Broken _CL_SafeFind() / _CL_SafeMatch() nesting 
