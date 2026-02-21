@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.1.0
 
 ### Fixed
 - Prevented Communities/Guild frame candidate iteration from stopping early when intermediate frame paths are missing, so fallback message frames are still discovered for URL hooking.
