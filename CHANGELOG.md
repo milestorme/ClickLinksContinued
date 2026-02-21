@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.9
+— Duplicate formatURL()
+— Broken _CL_SafeFind() / _CL_SafeMatch() nesting 
+— Pre-check always passes for messages with a period 
+
 ## 2.0.8
 
 ### Fixed
