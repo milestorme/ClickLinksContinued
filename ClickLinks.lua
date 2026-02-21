@@ -290,11 +290,14 @@ local function _CL_IsElvUIActive()
 end
 
 local HookCommunitiesFramesForClickableURLs -- forward declare (used before definition)
+local function _CL_TryHookCommunitiesFrames()
+    if not HookCommunitiesFramesForClickableURLs then return end
+    pcall(HookCommunitiesFramesForClickableURLs)
+end
+
 local function HookChatFramesForClickableURLs()
     if _CL_IsElvUIActive() then return end
-    if HookCommunitiesFramesForClickableURLs then
-        HookCommunitiesFramesForClickableURLs()
-    end
+    _CL_TryHookCommunitiesFrames()
     if not _G.ChatFrame1 then return end
 
     for i = 1, (NUM_CHAT_WINDOWS or 0) do
@@ -335,6 +338,7 @@ end
 
 local function _TryHookMessageFrame(frame)
     if _CL_IsElvUIActive() then return end
+    if not frame then return end
     if type(frame.AddMessage) ~= "function" then return end
 
     -- If another addon/UI code replaces AddMessage later, re-hook safely.
@@ -359,13 +363,18 @@ HookCommunitiesFramesForClickableURLs = function()
     local cf = _G.CommunitiesFrame
     if not cf then return end
 
-    local candidates = {
-        cf.Chat and cf.Chat.MessageFrame,
-        cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.Chat and cf.Chat.InsetFrame.Chat.MessageFrame,
-        cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.ChatFrame and cf.Chat.InsetFrame.ChatFrame.MessageFrame,
-        cf.ChatFrame and cf.ChatFrame.MessageFrame,
-        cf.ChatFrame,
-    }
+    local candidates = {}
+    local function addCandidate(frame)
+        if frame then
+            candidates[#candidates + 1] = frame
+        end
+    end
+
+    addCandidate(cf.Chat and cf.Chat.MessageFrame)
+    addCandidate(cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.Chat and cf.Chat.InsetFrame.Chat.MessageFrame)
+    addCandidate(cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.ChatFrame and cf.Chat.InsetFrame.ChatFrame.MessageFrame)
+    addCandidate(cf.ChatFrame and cf.ChatFrame.MessageFrame)
+    addCandidate(cf.ChatFrame)
 
     for _, f in ipairs(candidates) do
         _TryHookMessageFrame(f)
@@ -385,7 +394,7 @@ local function _CL_StartRehookTicker()
     __clRehookTicker = C_Timer.NewTicker(5, function()
         ticks = ticks + 1
         HookChatFramesForClickableURLs()
-        HookCommunitiesFramesForClickableURLs()
+        _CL_TryHookCommunitiesFrames()
         if _G.ClickLinks_EnsureSetItemRefHook then _G.ClickLinks_EnsureSetItemRefHook() end
         if ticks >= 12 then -- ~60 seconds
             __clRehookTicker:Cancel()
@@ -404,10 +413,10 @@ __clHookFrame:SetScript("OnEvent", function(_, event, addonName)
     -- Communities/Guild UI is loaded on-demand on Retail
     if event == "ADDON_LOADED" then
         if addonName == "Blizzard_Communities" or addonName == "Blizzard_GuildUI" then
-            HookCommunitiesFramesForClickableURLs()
+            _CL_TryHookCommunitiesFrames()
         end
     else
-        HookCommunitiesFramesForClickableURLs()
+        _CL_TryHookCommunitiesFrames()
     end
 end)
 
