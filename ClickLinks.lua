@@ -135,26 +135,6 @@ end
 
 
 
-
-local function formatURL(url)
-    local trailing
-    url, trailing = _SplitTrailingURLPunctuation(url)
-
-    -- If this is a bare domain (no scheme, no www), enforce TLD whitelist
-    if not string.find(url, "://", 1, true)
-        and not string.find(url, "www.", 1, true)
-    then
-        if not _CL_IsAllowedTLD(url) then
-            return url .. trailing
-        end
-    end
-
-    url = url:gsub("%|", "||")
-    return "|cff149bfd|Hurl:" .. url .. "|h[" .. url .. "]|h|r" .. trailing
-end
-
-
-
 -- ------------------------------------------------
 -- Safety helpers (Retail 12.x "secret" chat values)
 -- ------------------------------------------------
@@ -180,15 +160,14 @@ local function _CL_SafeFind(s, pattern, plain)
         return string.find(str, pat, 1, isPlain)
     end, s, pattern, plain == true)
     if ok then return idx end
+    return nil
+end
 
 local function _CL_SafeMatch(s, pattern)
     local ok, a, b, c, d = _CL_SafeCall(function(str, pat)
         return string.match(str, pat)
     end, s, pattern)
     if ok then return a, b, c, d end
-    return nil
-end
-
     return nil
 end
 
@@ -230,14 +209,14 @@ local function makeClickable(self, event, msg, ...)
 
     
     
-    -- Quick pre-check to avoid unnecessary gsub
-    -- We include a literal '.' trigger so bare domains like google.com are processed.
-    -- False positives are prevented by the TLD whitelist inside formatURL().
+    -- Quick pre-check to avoid unnecessary gsub.
+    -- Bare domains (e.g. google.com) are caught by the dot-containing patterns below;
+    -- false positives are filtered by the TLD whitelist inside formatURL().
     if not (_CL_SafeFind(msg, "://", true)
         or _CL_SafeFind(msg, "www%.", true)
         or _CL_SafeFind(msg, "@", true)
         or _CL_SafeFind(msg, "%d+%.%d+%.%d+%.%d+")
-        or _CL_SafeFind(msg, ".", true)) -- bare domains like google.com
+        or _CL_SafeFind(msg, "[%w_%-]+%.[%a][%a]")) -- bare domains like google.com
     then
         return false, msg, ...
     end
