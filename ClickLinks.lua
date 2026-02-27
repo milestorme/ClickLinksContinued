@@ -225,8 +225,9 @@ local function makeClickable(self, event, msg, ...)
 
 
     local ok, newMsg = _CL_SafeCall(function(m)
-        for _, pattern in ipairs(URL_PATTERNS) do
-            m = m:gsub(pattern, formatURL)
+        local gsub = string.gsub
+        for i = 1, #URL_PATTERNS do
+            m = gsub(m, URL_PATTERNS[i], formatURL)
         end
         return m
     end, msg)

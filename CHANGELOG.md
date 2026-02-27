@@ -1,4 +1,6 @@
-# Changelog
+## 2.1.1
+- Performance: Optimized URL pattern processing loop (no behavior changes)
+- Performance: Reduced global lookups in message handling
 
 ## 2.1.0
 
