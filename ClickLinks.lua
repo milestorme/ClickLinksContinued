@@ -191,7 +191,11 @@ local function makeClickable(self, event, msg, ...)
         local CH = E and E.GetModule and E:GetModule("Chat", true)
         -- CH.db.url defaults to true; skip unless the user has explicitly disabled it in ElvUI
         if not (CH and CH.db and CH.db.url == false) then
-            return false, msg, ...
+            -- Return nil to signal "no change" so Blizzard keeps the original
+            -- args. Returning (false, msg, ...) would propagate addon taint to
+            -- all varargs (including the sender name), which causes
+            -- "secret string" errors in ChatFrameUtil.SetLastTellTarget on 12.x.
+            return
         end
     end
 
@@ -199,16 +203,14 @@ local function makeClickable(self, event, msg, ...)
     -- This avoids edge-case corruption and plays nicer with other chat addons.
     -- Retail 12.x can pass "secret" chat values that error on string methods.
     if not _CL_CanTreatAsString(msg) then
-        return false, msg, ...
+        return
     end
 
     -- If the line already contains hyperlinks (items/spells/etc), don't touch it.
     if _CL_SafeFind(msg, "|H", true) then
-        return false, msg, ...
+        return
     end
 
-    
-    
     -- Quick pre-check to avoid unnecessary gsub.
     -- Bare domains (e.g. google.com) are caught by the dot-containing patterns below;
     -- false positives are filtered by the TLD whitelist inside formatURL().
@@ -218,11 +220,8 @@ local function makeClickable(self, event, msg, ...)
         or _CL_SafeFind(msg, "%d+%.%d+%.%d+%.%d+")
         or _CL_SafeFind(msg, "[%w_%-]+%.[%a][%a]")) -- bare domains like google.com
     then
-        return false, msg, ...
+        return
     end
-
-
-
 
     local ok, newMsg = _CL_SafeCall(function(m)
         for _, pattern in ipairs(URL_PATTERNS) do
