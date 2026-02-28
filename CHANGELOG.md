@@ -1,5 +1,3 @@
-## 2.1.2
-- Compress TOC
 
 ## 2.1.1
 - Performance: Optimized URL pattern processing loop (no behavior changes)
