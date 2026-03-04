@@ -20,6 +20,6 @@ L["TOOLTIP_LEFTCLICK_JOURNAL"] = "左鍵：日誌"
 L["UPDATE_AVAILABLE"] = "有可用的新版本。"
 L["UPDATE_HINT"] = "請透過 CurseForge 更新。"
 L["VERSION_CMD"] = "插件版本："
-L["WOWHEAD_COPY_URL"] = "Copy Wowhead URL"
+L["WOWHEAD_COPY_URL"] = "複製 Wowhead 連結"
 L["YOUR_VERSION"] = "你的版本："
 

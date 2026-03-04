@@ -20,6 +20,6 @@ L["TOOLTIP_LEFTCLICK_JOURNAL"] = "左クリック: ジャーナル"
 L["UPDATE_AVAILABLE"] = "新しいバージョンがあります。"
 L["UPDATE_HINT"] = "CurseForge から更新してください。"
 L["VERSION_CMD"] = "アドオンのバージョン:"
-L["WOWHEAD_COPY_URL"] = "Copy Wowhead URL"
+L["WOWHEAD_COPY_URL"] = "Wowhead URLをコピー"
 L["YOUR_VERSION"] = "現在のバージョン:"
 
