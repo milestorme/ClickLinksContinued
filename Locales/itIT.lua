@@ -20,5 +20,6 @@ L["TOOLTIP_LEFTCLICK_JOURNAL"] = "Clic sin.: diario"
 L["UPDATE_AVAILABLE"] = "È disponibile una versione più recente."
 L["UPDATE_HINT"] = "Aggiorna tramite CurseForge."
 L["VERSION_CMD"] = "Versione addon:"
+L["WOWHEAD_COPY_URL"] = "Copy Wowhead URL"
 L["YOUR_VERSION"] = "La tua versione:"
 

@@ -516,6 +516,9 @@ local function _CL_ShowCopyBox(text)
     end)
 end
 
+-- Expose for sub-modules (e.g. WowheadLinks)
+_G.ClickLinks_ShowCopyBox = _CL_ShowCopyBox
+
 local _AddToJournal -- forward declared (used by URL hooks)
 
 --[[-------------------------------------------------------------------------
@@ -718,6 +721,9 @@ _AddToJournal = function(url)
         _UpdateJournalUI()
     end
 end
+
+-- Expose for sub-modules (e.g. WowheadLinks)
+_G.ClickLinks_AddToJournal = _AddToJournal
 
 -- ---- Journal UI ----
 -- (JournalFrame locals were forward-declared above so _AddToJournal can refresh the list live)

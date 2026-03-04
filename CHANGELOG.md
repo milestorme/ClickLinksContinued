@@ -1,7 +1,10 @@
+## 2.1.2
+- Added new feature, Right-click any item, spell, quest, achievement, professions or currency link in chat to get a "Copy Wowhead URL" option. 
 
 ## 2.1.1
 - Performance: Optimized URL pattern processing loop (no behavior changes)
 - Performance: Reduced global lookups in message handling
+
 
 ## 2.1.0
 
