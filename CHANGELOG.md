@@ -1,5 +1,6 @@
 ## 2.1.3
 - Added missing translations for "Copy Wowhead URL" option. 
+- Fix: return nil (no values) on all early bailout paths to avoid Secret string taint error.
 
 ## 2.1.2
 - Added new feature, Right-click any item, spell, quest, achievement, professions or currency link in chat to get a "Copy Wowhead URL" option. 
