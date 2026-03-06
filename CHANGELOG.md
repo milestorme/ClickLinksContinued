@@ -1,3 +1,9 @@
+## 2.1.5
+- Support Questie-style quest links (questie:QUESTID) by mapping them to the Wowhead quest URL
+
+## 2.1.4
+- Detect which WoW client we are running on and choose the correct Wowhead URL path so links go to the right database (Classic Era, Wrath, MoP, etc.).
+
 ## 2.1.3
 - Added missing translations for "Copy Wowhead URL" option. 
 - Fix: return nil (no values) on all early bailout paths to avoid Secret string taint error.

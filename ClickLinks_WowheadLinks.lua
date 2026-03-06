@@ -110,6 +110,15 @@ local function GetWowheadURL(link)
         end
     end
 
+    -- Questie addon quest links: questie:QUESTID:PlayerGUID
+    -- These map to wowhead.com/quest= just like standard quest links.
+    if string.sub(link, 1, 8) == "questie:" then
+        local id = tonumber(string.match(link, "^questie:(%d+)"))
+        if id then
+            return WOWHEAD_URLS.quest .. id
+        end
+    end
+
     -- Profession / tradeskill links: trade:SPELLID:... or trade:GUID:SPELLID:...
     -- The spell ID in trade links maps to wowhead.com/spell=
     if string.sub(link, 1, 6) == "trade:" then
@@ -141,6 +150,7 @@ local SUPPORTED_PREFIXES = {
     "item:",
     "spell:",
     "quest:",
+    "questie:",
     "achievement:",
     "currency:",
     "trade:",
