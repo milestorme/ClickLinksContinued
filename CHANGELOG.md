@@ -1,3 +1,9 @@
+## 2.1.6
+### Fixed
+- Pre-check for `www.` URLs was searching for the literal string `www%.` (with a percent sign) due to passing an escaped pattern in plain-text search mode; corrected to `www.`
+- Copy-box position restore now validates all four SavedVariables fields (point, relativePoint, x, y) before calling `SetPoint`, preventing errors from corrupted or partially-written saved data
+- Journal URL display truncation now produces exactly 300 characters (was 303 due to appending `...` after a 300-char substring)
+
 ## 2.1.5
 - Support Questie-style quest links (questie:QUESTID) by mapping them to the Wowhead quest URL
 

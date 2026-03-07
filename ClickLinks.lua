@@ -215,7 +215,7 @@ local function makeClickable(self, event, msg, ...)
     -- Bare domains (e.g. google.com) are caught by the dot-containing patterns below;
     -- false positives are filtered by the TLD whitelist inside formatURL().
     if not (_CL_SafeFind(msg, "://", true)
-        or _CL_SafeFind(msg, "www%.", true)
+        or _CL_SafeFind(msg, "www.", true)
         or _CL_SafeFind(msg, "@", true)
         or _CL_SafeFind(msg, "%d+%.%d+%.%d+%.%d+")
         or _CL_SafeFind(msg, "[%w_%-]+%.[%a][%a]")) -- bare domains like google.com
@@ -435,14 +435,14 @@ local function _CL_EnsureCopyBox()
     local f = CreateFrame("Frame", "ClickLinks_CopyBox", UIParent, template)
     f:SetFrameStrata("DIALOG")
     f:SetSize(420, 70)
-    if ClickLinksDB.copyBoxPos and type(ClickLinksDB.copyBoxPos.x) == "number" then
-        f:SetPoint(
-            ClickLinksDB.copyBoxPos.point,
-            UIParent,
-            ClickLinksDB.copyBoxPos.relativePoint,
-            ClickLinksDB.copyBoxPos.x,
-            ClickLinksDB.copyBoxPos.y
-        )
+    local cbp = ClickLinksDB.copyBoxPos
+    if cbp
+        and type(cbp.point) == "string"
+        and type(cbp.relativePoint) == "string"
+        and type(cbp.x) == "number"
+        and type(cbp.y) == "number"
+    then
+        f:SetPoint(cbp.point, UIParent, cbp.relativePoint, cbp.x, cbp.y)
     else
         f:SetPoint("CENTER")
     end
@@ -871,7 +871,7 @@ _UpdateJournalUI = function()
 
             local ts = _FormatTime(entry.t)
             local display = entry.url or ""
-            if #display > 300 then display = display:sub(1, 300) .. "..." end
+            if #display > 300 then display = display:sub(1, 297) .. "..." end
 
             btn._url = entry.url
             btn._ts = entry.t
