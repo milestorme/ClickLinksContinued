@@ -1,4 +1,4 @@
-## Interface: 30405, 380000
+## Interface: 30405, 38000
 ## Title: Click Links
 ## Notes: Makes URLs clickable in chat and provides a clickable journal.
 ## Author: tannerng, Milestorme
