@@ -199,9 +199,8 @@ local function makeClickable(self, event, msg, ...)
         end
     end
 
-    -- If the line already contains hyperlinks (items/spells/etc), don't touch it.
-    -- This avoids edge-case corruption and plays nicer with other chat addons.
     -- Retail 12.x can pass "secret" chat values that error on string methods.
+    -- Guard against non-string types before any string operations.
     if not _CL_CanTreatAsString(msg) then
         return
     end
@@ -307,20 +306,22 @@ local function HookChatFramesForClickableURLs()
             if cf.AddMessage ~= cf.__ClickLinks_WrappedAddMessage then
                 cf.__ClickLinks_OrigAddMessage = cf.AddMessage
                 cf.__ClickLinks_WrappedAddMessage = function(self, text, ...)
-                if _CL_CanTreatAsString(text) then
-                    -- Reuse the same safety rules as makeClickable:
-                    -- 1) Do not touch existing hyperlinks
-                    -- 2) Only process if it looks like it contains a URL/email/IP
-                    if not _CL_SafeFind(text, "|H", true) then
-                        -- makeClickable returns (false, msg, ...) because it's a filter; we only need the transformed msg.
-                        local ok, _, newText = _CL_SafeCall(makeClickable, self, "ADD_MESSAGE", text, ...)
-                        if ok and newText then
-                            text = newText
+                    if _CL_CanTreatAsString(text) then
+                        -- Reuse the same safety rules as makeClickable:
+                        -- 1) Do not touch existing hyperlinks
+                        -- 2) Only process if it looks like it contains a URL/email/IP
+                        if not _CL_SafeFind(text, "|H", true) then
+                            -- makeClickable returns (false, msg, ...) because it's a filter; we only need the transformed msg.
+                            local ok, _, newText = _CL_SafeCall(makeClickable, self, "ADD_MESSAGE", text, ...)
+                            if ok and newText then
+                                text = newText
+                            end
                         end
                     end
-                end
                     local orig = self.__ClickLinks_OrigAddMessage
-                    return orig(self, text, ...)
+                    if orig then
+                        return orig(self, text, ...)
+                    end
                 end
 
                 cf.AddMessage = cf.__ClickLinks_WrappedAddMessage
@@ -353,7 +354,9 @@ local function _TryHookMessageFrame(frame)
             end
         end
         local orig = self.__ClickLinks_OrigAddMessage
-        return orig(self, msg, ...)
+        if orig then
+            return orig(self, msg, ...)
+        end
     end
 
     frame.AddMessage = frame.__ClickLinks_WrappedAddMessage
@@ -556,6 +559,10 @@ _G.ClickLinks_SetItemRef_Wrapper = _G.ClickLinks_SetItemRef_Wrapper or function(
         orig = _G.ClickLinks_OriginalSetItemRef_Base
     end
 
+    if not orig then
+        return
+    end
+
     _G.__ClickLinks_InSetItemRef = true
     local ok, r1, r2, r3, r4 = pcall(orig, link, text, button, chatFrame)
     _G.__ClickLinks_InSetItemRef = false
@@ -605,6 +612,7 @@ end
 _G.ClickLinks_EnsureSetItemRefHook()
 
 -- (Optional) Keep the ItemRefTooltip hook as a secondary path for clients that call it directly.
+if ItemRefTooltip then
 local OriginalSetHyperlink = ItemRefTooltip.SetHyperlink
 function ItemRefTooltip:SetHyperlink(link)
     if type(link) == "string" and link:match("^url:") then
@@ -613,10 +621,11 @@ function ItemRefTooltip:SetHyperlink(link)
         _CL_ShowCopyBox(u)
     else
         if type(OriginalSetHyperlink) == "function" then
-            local ok = pcall(OriginalSetHyperlink, self, link)
-            if ok then return end
+            pcall(OriginalSetHyperlink, self, link)
         end
+        return
     end
+end
 end
 
 

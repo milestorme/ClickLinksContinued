@@ -1,3 +1,13 @@
+## 2.1.7
+
+### Fixed
+- Added nil guards to AddMessage hooks (chat frames and Communities/Guild frames) to prevent crash if original handler is unexpectedly nil
+- Added nil guard in SetItemRef wrapper to prevent silent click-drop when original handler is missing
+- Wrapped ItemRefTooltip:SetHyperlink hook in existence check to prevent load-time crash on clients without ItemRefTooltip
+- Fixed ItemRefTooltip:SetHyperlink error handling to always return instead of falling through when original handler errors
+- Fixed misleading comment on string-type safety check that incorrectly referenced hyperlinks
+- Fixed inconsistent indentation in AddMessage hook function body
+
 ## 2.1.6
 
 ### Fixed
