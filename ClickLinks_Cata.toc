@@ -1,4 +1,4 @@
-## Interface: 380000
+## Interface: 40402
 ## Title: Click Links
 ## Notes: Makes URLs clickable in chat and provides a clickable journal.
 ## Author: tannerng, Milestorme
@@ -8,7 +8,6 @@
 ## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga
 ## X-Locale: enUS
 ## X-Localizations: enUS, deDE, esES, esMX, frFR, itIT, jaJP, koKR, ptBR, ruRU, zhCN, zhTW
-## X-Flavor: TitanReforged
 
 Libs\LibStub\LibStub.lua
 Libs\AceLocale-3.0\AceLocale-3.0.lua
