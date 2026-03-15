@@ -1,9 +1,9 @@
-## Interface: 120001
+## Interface: 120005
 ## Title: ClickLinks
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 2.1.7
+## Version: 2.1.8
 ## SavedVariables: ClickLinksDB
 ## Category: Chat
 ## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga

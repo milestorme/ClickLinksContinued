@@ -1,3 +1,7 @@
+## 2.1.8
+
+- Updated TOC game version for midnight
+
 ## 2.1.7
 
 ### Fixed
