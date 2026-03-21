@@ -1,5 +1,10 @@
-## 2.1.8
+## 2.2.0
+- Only return modified args when message actually changed
 
+## 2.1.9
+- Fixed TOC loading error
+
+## 2.1.8
 - Updated TOC game version for midnight
 
 ## 2.1.7
