@@ -230,10 +230,14 @@ local function makeClickable(self, event, msg, ...)
         end
         return m
     end, msg)
-    if ok and type(newMsg) == "string" then
-        msg = newMsg
+    if ok and type(newMsg) == "string" and newMsg ~= msg then
+        return false, newMsg, ...
     end
-    return false, msg, ...
+    -- Message wasn't actually modified (e.g. bare "word.word" matched the
+    -- pre-check but no real URL was found).  Return nil so Blizzard keeps the
+    -- original args untainted — returning (false, msg, ...) would taint the
+    -- secret BNet sender name on 12.x.
+    return
 end
 
 
