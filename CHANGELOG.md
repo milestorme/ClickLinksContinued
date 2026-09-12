@@ -1,3 +1,6 @@
+## 2.2.2
+- strip the path off before checking the TLD, so the whitelist check only ever looks at the actual domain part. I verified this against the full pattern-matching pipeline (traced it line-by-line through the real matching logic)
+
 ## 2.2.1
 - Register a "url" link handler instead of replacing ItemRefTooltip:SetHyperlink
 

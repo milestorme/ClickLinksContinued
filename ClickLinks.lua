@@ -110,7 +110,11 @@ local ALLOWED_TLDS = {
 }
 
 local function _CL_IsAllowedTLD(domain)
-    local tld = domain:match("%.([%a][%a]+)$")
+    -- domain may include a trailing path (e.g. "discord.gg/abc123"); only
+    -- the part before the first "/" is the actual domain, so the TLD check
+    -- must be run against that, not the whole domain+path string.
+    local domainOnly = domain:match("^([^/]+)") or domain
+    local tld = domainOnly:match("%.([%a][%a]+)$")
     if not tld then return false end
     return ALLOWED_TLDS[string.lower(tld)] == true
 end

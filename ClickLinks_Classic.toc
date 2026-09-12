@@ -1,9 +1,9 @@
-## Interface: 11508
+## Interface: 11509
 ## Title: ClickLinks
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 2.2.1
+## Version: 2.2.2
 ## SavedVariables: ClickLinksDB
 ## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga
 ## X-Locale: enUS
