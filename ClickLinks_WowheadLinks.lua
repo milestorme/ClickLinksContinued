@@ -87,6 +87,34 @@ local function ShowWowheadMenu(wowheadURL)
         UIDropDownMenu_AddButton(info, level)
 
         info = UIDropDownMenu_CreateInfo()
+        info.text = "Save to ClickLinks Journal"
+        info.notCheckable = true
+        info.func = function()
+            if _G.ClickLinks_AddToJournal then _G.ClickLinks_AddToJournal(wowheadURL) end
+        end
+        UIDropDownMenu_AddButton(info, level)
+
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "Save as Favourite"
+        info.notCheckable = true
+        info.func = function()
+            if ClickLinks and ClickLinks.Journal then
+                local id = ClickLinks.Journal.Add(wowheadURL)
+                if id then ClickLinks.Journal.SetFavorite(id, true) end
+            end
+        end
+        UIDropDownMenu_AddButton(info, level)
+
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "Copy Wowhead ID"
+        info.notCheckable = true
+        info.func = function()
+            local id = wowheadURL:match("=(%d+)")
+            if id and _G.ClickLinks_ShowCopyBox then _G.ClickLinks_ShowCopyBox(id) end
+        end
+        UIDropDownMenu_AddButton(info, level)
+
+        info = UIDropDownMenu_CreateInfo()
         info.text = L["CANCEL"] or "Cancel"
         info.notCheckable = true
         info.func = function() end

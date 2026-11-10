@@ -444,7 +444,7 @@ local function _CL_EnsureCopyBox()
 
     local template = (BackdropTemplateMixin and "BackdropTemplate") or nil
     local f = CreateFrame("Frame", "ClickLinks_CopyBox", UIParent, template)
-    f:SetFrameStrata("DIALOG")
+    f:SetFrameStrata("TOOLTIP")
     f:SetSize(420, 70)
     local cbp = ClickLinksDB.copyBoxPos
     if cbp
@@ -515,6 +515,9 @@ end
 local function _CL_ShowCopyBox(text)
     local f = _CL_EnsureCopyBox()
     if not f or not f.editBox then return end
+    -- Keep the copy popup above the Journal and other dialog-level frames.
+    f:SetFrameStrata("TOOLTIP")
+    f:Raise()
     f:Show()
     f.editBox:SetText(text or "")
     -- Slight delay ensures focus isn't stolen by other UI hooks
@@ -659,274 +662,28 @@ local PREFIX = "CLICKLINKS_VER"
 
 -- notes: SavedVariables: stores a one-time warning flag so users don't get spammed repeatedly.
 ClickLinksDB = ClickLinksDB or { warned = false }
-
--- ------------------------------------------------
--- Journal + Minimap Button (Saved clicked links)
--- ------------------------------------------------
--- notes:
---   ClickLinksDB.journal: array of { url = "...", t = time() }
---   ClickLinksDB.minimap: { hide = false, angle = 220 }
---   Use /cl journal (or minimap button) to open the journal.
-
-ClickLinksDB.journal = ClickLinksDB.journal or {}
-ClickLinksDB.journalMax = ClickLinksDB.journalMax or 200
-ClickLinksDB.minimap = ClickLinksDB.minimap or { hide = false, angle = 220 }
-ClickLinksDB.copyBoxPos = ClickLinksDB.copyBoxPos or nil
-
--- ---- Journal data normalization ----
--- notes:
---   Older test builds (or manual edits) may leave the journal as a sparse table or with non-entry values.
---   Normalize it into a clean array so #journal, table.remove, and UI iteration are safe.
-local function _NormalizeJournal()
-    local j = ClickLinksDB.journal
-    if type(j) ~= "table" then
-        ClickLinksDB.journal = {}
+local _journalReady, _journalError = ClickLinks.Journal.Initialize()
+if not _journalReady then
+    print( "ClickLinks: "..L["JOURNAL_SCHEMA_ERROR"].." " .. tostring(_journalError))
+end
+_AddToJournal = function(url)
+    if not _journalReady then return end
+    local check = ClickLinks.Security.Analyze(url)
+    if not check.allowed then
+        print("ClickLinks: "..L["URL_NOT_SAVED"].." (" .. tostring(check.reasons[1]) .. ")")
         return
     end
-
-    local arr = {}
-
-    for _, v in pairs(j) do
-        if type(v) == "table" then
-            local url = v.url or v[1]
-            local t = v.t or v.time or v[2]
-            if type(url) == "string" and url ~= "" then
-                table.insert(arr, { url = url, t = tonumber(t) or time() })
-            end
-        elseif type(v) == "string" and v ~= "" then
-            table.insert(arr, { url = v, t = time() })
-        end
+    if check.severity == "warning" and ClickLinksDB.settings.securityWarnings then
+        print( "|cffffbb55"..L["SECURITY_WARNING"].."|r " .. table.concat(check.reasons, ", "))
     end
-
-    table.sort(arr, function(a, b)
-        return (a.t or 0) < (b.t or 0) -- oldest -> newest
-    end)
-
-    ClickLinksDB.journal = arr
-end
-
-_NormalizeJournal()
-
-local function _TrimJournal()
-    local maxKeep = tonumber(ClickLinksDB.journalMax) or 200
-    if maxKeep < 10 then maxKeep = 10 end
-    local j = ClickLinksDB.journal
-    local extra = #j - maxKeep
-    if extra > 0 then
-        for i = 1, extra do
-            table.remove(j, 1)
-        end
+    local result, err = ClickLinks.Journal.Add(url)
+    if not result and err ~= "invalid_url" then
+        print(L["JOURNAL_ERROR"].." " .. tostring(err))
     end
 end
-
-local function _ClearJournal()
-    local j = ClickLinksDB.journal
-    for i = #j, 1, -1 do
-        j[i] = nil
-    end
-end
-
--- Journal UI forward declarations (so journal updates live while the window is open)
-local JournalFrame, JournalScrollChild, JournalButtons = nil, nil, nil
-local _UpdateJournalUI  -- forward declaration (used by _AddToJournal and journal actions)
-
-_AddToJournal = function(url)
-    url = tostring(url or "")
-    url = url:gsub("||", "|")
-    url = url:gsub("%s+$", ""):gsub("^%s+", "")
-    if url == "" then return end
-
-    local j = ClickLinksDB.journal
-
-    -- De-duplicate: if URL already exists anywhere, remove old entry(ies) and re-add as newest.
-    for i = #j, 1, -1 do
-        local e = j[i]
-        if e and e.url == url then
-            table.remove(j, i)
-        end
-    end
-
-    j[#j + 1] = { url = url, t = time() }
-    _TrimJournal()
-    if JournalFrame and JournalFrame:IsShown() then
-        _UpdateJournalUI()
-    end
-end
-
--- Expose for sub-modules (e.g. WowheadLinks)
 _G.ClickLinks_AddToJournal = _AddToJournal
-
--- ---- Journal UI ----
--- (JournalFrame locals were forward-declared above so _AddToJournal can refresh the list live)
-
-local function _FormatTime(ts)
-    if type(date) == "function" and ts then
-        return date("%Y-%m-%d %H:%M", ts)
-    end
-    return ""
-end
-
-local function _EnsureJournalUI()
-    if JournalFrame then return end
-
-    local template = (BackdropTemplateMixin and "BackdropTemplate") or nil
-    JournalFrame = CreateFrame("Frame", "ClickLinks_JournalFrame", UIParent, template)
-    JournalFrame:SetSize(520, 420)
-    JournalFrame:SetPoint("CENTER")
-    JournalFrame:SetFrameStrata("DIALOG")
-    JournalFrame:EnableMouse(true)
-    JournalFrame:SetMovable(true)
-    JournalFrame:RegisterForDrag("LeftButton")
-    JournalFrame:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    JournalFrame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
-    JournalFrame:Hide()
-
-    if JournalFrame.SetBackdrop then
-        JournalFrame:SetBackdrop({
-            bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-            edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 16,
-            insets = { left = 4, right = 4, top = 4, bottom = 4 }
-        })
-        JournalFrame:SetBackdropColor(0, 0, 0, 0.95)
-    end
-
-    local title = JournalFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", 0, -10)
-    title:SetText(L["JOURNAL_TITLE"])
-
-    local hint = JournalFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hint:SetPoint("TOP", title, "BOTTOM", 0, -6)
-    hint:SetText(L["JOURNAL_HINT"])
-
-    local close = CreateFrame("Button", nil, JournalFrame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -2, -2)
-
-    local clear = CreateFrame("Button", nil, JournalFrame, "UIPanelButtonTemplate")
-    clear:SetSize(90, 22)
-    clear:SetPoint("TOPRIGHT", -38, -28)
-    clear:SetText(L["CLEAR_ALL"])
-    clear:SetScript("OnClick", function()
-        -- Confirm before wiping the entire journal (prevents misclicks)
-        StaticPopupDialogs["CLICKLINKS_CLEAR_JOURNAL_CONFIRM"] = StaticPopupDialogs["CLICKLINKS_CLEAR_JOURNAL_CONFIRM"] or {
-            text = L["CLEAR_ALL_CONFIRM"],
-            button1 = L["OK"],
-            button2 = L["CANCEL"],
-            OnAccept = function()
-                _ClearJournal()
-                if JournalFrame and JournalFrame:IsShown() and _UpdateJournalUI then
-                    _UpdateJournalUI()
-                end
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-        StaticPopup_Show("CLICKLINKS_CLEAR_JOURNAL_CONFIRM")
-    end)
-
-
-    local scroll = CreateFrame("ScrollFrame", "ClickLinks_JournalScrollFrame", JournalFrame, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 16, -58)
-    scroll:SetPoint("BOTTOMRIGHT", -34, 16)
-
-    JournalScrollChild = CreateFrame("Frame", nil, scroll)
-    JournalScrollChild:SetSize(1, 1)
-    scroll:SetScrollChild(JournalScrollChild)
-
-    JournalButtons = {}
-end
-
-_UpdateJournalUI = function()
-    if not JournalFrame or not JournalFrame:IsShown() then return end
-    _EnsureJournalUI()
-
-    -- Ensure journal is a clean array (protects against old saved data / sparse tables)
-    _NormalizeJournal()
-    local j = ClickLinksDB.journal
-
-    local rowH = 20
-    local width = 460
-
-    for i = 1, #JournalButtons do
-        JournalButtons[i]:Hide()
-    end
-
-    local shown = 0
-
-    -- Newest-first (journal is oldest->newest, so iterate backwards)
-    for i = #j, 1, -1 do
-        local entry = j[i]
-        if entry and type(entry.url) == "string" and entry.url ~= "" then
-            shown = shown + 1
-            local idx = shown -- 1..shown newest first
-            local btn = JournalButtons[idx]
-            if not btn then
-                btn = CreateFrame("Button", nil, JournalScrollChild)
-                btn:SetHeight(rowH)
-                btn:SetWidth(width)
-                btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                btn.text:SetPoint("LEFT", 2, 0)
-                btn.text:SetJustifyH("LEFT")
-                btn.text:SetWidth(width - 4)
-                btn.text:SetWordWrap(false)
-
-                btn:SetHighlightTexture("Interface/QuestFrame/UI-QuestTitleHighlight")
-                btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-                btn:SetScript("OnClick", function(self, button)
-                    local url = self._url
-                    if not url then return end
-                    if button == "RightButton" then
-                        local idxToRemove = self._journalIndex
-                        local entry = idxToRemove and ClickLinksDB.journal[idxToRemove]
-                        if entry and entry.url == self._url and entry.t == self._ts then
-                            table.remove(ClickLinksDB.journal, idxToRemove)
-                        else
-                            -- fallback for legacy rows/state drift
-                            for k = #ClickLinksDB.journal, 1, -1 do
-                                local e = ClickLinksDB.journal[k]
-                                if e and e.url == self._url and e.t == self._ts then
-                                    table.remove(ClickLinksDB.journal, k)
-                                    break
-                                end
-                            end
-                        end
-                        _UpdateJournalUI()
-                    else
-                        _CL_ShowCopyBox(url)
-                    end
-                end)
-
-                JournalButtons[idx] = btn
-            end
-
-            local ts = _FormatTime(entry.t)
-            local display = entry.url or ""
-            if #display > 300 then display = display:sub(1, 297) .. "..." end
-
-            btn._url = entry.url
-            btn._ts = entry.t
-            btn._journalIndex = i
-            btn.text:SetText((ts ~= "" and ("|cffaaaaaa" .. ts .. "|r  ") or "") .. "|cff00ccff" .. display .. "|r")
-            btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", 0, -((idx - 1) * rowH))
-            btn:Show()
-        end
-    end
-
-    JournalScrollChild:SetHeight(math.max(1, shown * rowH))
-end
-
-
 local function ToggleJournal()
-    _EnsureJournalUI()
-    if JournalFrame:IsShown() then
-        JournalFrame:Hide()
-    else
-        JournalFrame:Show()
-        _UpdateJournalUI()
-    end
+    if _journalReady then ClickLinks.UI.ToggleJournal() end
 end
 
 -- ---- Minimap button (LibDBIcon-1.0) ----
@@ -1053,12 +810,13 @@ local function SendVersionToGroup()
     end
 end
 
-f:SetScript("OnEvent", function(_, event, prefix, message)
+f:SetScript("OnEvent", function(_, event, prefix, message, channel, sender)
     -- notes: Central event router for version system.
     if event == "PLAYER_LOGIN" then
         -- notes: On login, announce version to guild and current group (if any).
         SendVersionToGroup()
         _InitMinimap()
+        ClickLinks.Sharing.Initialize()
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         -- notes: When group changes:
@@ -1069,6 +827,9 @@ f:SetScript("OnEvent", function(_, event, prefix, message)
         else
             SendVersionToGroup()
         end
+
+    elseif event == "CHAT_MSG_ADDON" and prefix == "CLKLNK23" then
+        ClickLinks.Sharing.Receive(sender, message)
 
     elseif event == "CHAT_MSG_ADDON" and prefix == PREFIX then
         -- notes: On receiving another player's version, compare and (once) warn if theirs is newer.
@@ -1099,6 +860,26 @@ SlashCmdList["CLICKLINKS"] = function(msg)
 
     elseif msg == "journal" or msg == "log" then
         ToggleJournal()
+
+    elseif msg == "accept" then
+        local id,err = ClickLinks.Sharing.Accept()
+        if not id then print("ClickLinks: "..tostring(err)) end
+
+    elseif msg == "reject" then
+        ClickLinks.Sharing.Reject()
+
+    elseif msg == "sharing on" then
+        ClickLinksDB.settings.sharingEnabled = true
+        print("ClickLinks: "..L["SHARING_ENABLED"])
+
+    elseif msg == "sharing off" then
+        ClickLinksDB.settings.sharingEnabled = false
+        print("ClickLinks: "..L["SHARING_DISABLED"])
+
+    elseif msg:match("^share %d+ ") then
+        local id,channel = msg:match("^share (%d+) (%a+)$")
+        local ok,err = ClickLinks.Sharing.Send(tonumber(id),channel and channel:upper())
+        if not ok then print("ClickLinks: "..tostring(err)) end
 
     elseif msg == "minimap" then
         ToggleMinimapButton()

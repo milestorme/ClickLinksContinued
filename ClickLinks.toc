@@ -1,9 +1,9 @@
-## Interface: 120001, 120005
+## Interface: 120107
 ## Title: ClickLinks
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 2.2.2
+## Version: 2.3.0
 ## SavedVariables: ClickLinksDB
 ## Category: Chat
 ## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga
@@ -27,5 +27,9 @@ Locales\zhCN.lua
 Locales\zhTW.lua
 Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+Core\JournalManager.lua
+Core\Security.lua
+Core\LinkSharing.lua
+UI\Journal.lua
 ClickLinks.lua
 ClickLinks_WowheadLinks.lua

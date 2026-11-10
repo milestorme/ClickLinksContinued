@@ -1,3 +1,38 @@
+## 2.3.0
+
+### Added
+- Redesigned Link Journal with a modern dark interface.
+- Account-wide Journal with search, category filters, and sorting.
+- Favourites and pinned links, with gold star indicators for favourited entries.
+- Duplicate link handling, recently copied link history, and Journal export.
+- Automatic link categorisation and expanded Wowhead link actions.
+- Advisory URL safety warnings and configurable domain preferences.
+- Optional addon-to-addon link sharing.
+
+### Changed
+- Journal saves clicked or explicitly saved links only; links merely appearing in chat are not automatically stored.
+- Updated Journal storage format with migration support for existing saved links and settings.
+- Updated Favourites controls to use star icons and hover tooltips.
+- Favourite indicator beside a URL appears only when that link is favourited.
+
+### Fixed
+- Fixed a Lua error when opening the Journal if its entries table was missing or uninitialised.
+- Replaced rectangular Favourites indicators with star icons.
+- Improved Journal initialisation safeguards.
+
+### Localization and compatibility updates
+- Expanded localization coverage across all 12 supported languages, including Journal controls, status messages, export actions, and link-sharing notifications.
+- Improved terminology and translation consistency in selected locales.
+- Reviewed interface declarations across all seven TOC files, preserving both regular Wrath Classic (`30405`) and Chinese Titan Reforged (`38002`) compatibility values.
+
+### Additional fixes
+- Raised the URL copy popup above the Journal window to prevent it from being obscured.
+- Removed the addon version from the Journal heading.
+- Restored the Journal heading's positioning and corrected its localized title display.
+
+## 2.2.3
+- added to wow forvever 1.60.1
+
 ## 2.2.2
 - strip the path off before checking the TLD, so the whitelist check only ever looks at the actual domain part. I verified this against the full pattern-matching pipeline (traced it line-by-line through the real matching logic)
 
