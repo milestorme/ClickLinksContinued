@@ -292,142 +292,80 @@ _CL_RegisterAllChatFilters()
 -- notes: and do NOT go through CHAT_MSG_* filters. We wrap AddMessage to catch those too.
 -- notes: ElvUI replaces the ChatFrame system but correctly passes messages through CHAT_MSG_* filters,
 -- notes: so the AddMessage hook is not needed (and causes triple-message display) when ElvUI is active.
+-- Compatibility: never re-wrap a chat frame after another addon has replaced it.
+-- A previous implementation stored the original method on the frame and refreshed
+-- it during login/ticker events. When another addon wrapped our wrapper, that
+-- could create a cycle and stop all incoming chat from rendering.
 local function _CL_IsElvUIActive()
-    return _G.ElvUI ~= nil
-end
-
-local HookCommunitiesFramesForClickableURLs -- forward declare (used before definition)
-local function _CL_TryHookCommunitiesFrames()
-    if not HookCommunitiesFramesForClickableURLs then return end
-    pcall(HookCommunitiesFramesForClickableURLs)
-end
-
-local function HookChatFramesForClickableURLs()
-    if _CL_IsElvUIActive() then return end
-    _CL_TryHookCommunitiesFrames()
-    if not _G.ChatFrame1 then return end
-
-    for i = 1, (NUM_CHAT_WINDOWS or 0) do
-        local cf = _G["ChatFrame" .. i]
-        if cf and type(cf.AddMessage) == "function" then
-            -- If another addon replaced AddMessage after our hook, re-hook safely.
-            if cf.AddMessage ~= cf.__ClickLinks_WrappedAddMessage then
-                cf.__ClickLinks_OrigAddMessage = cf.AddMessage
-                cf.__ClickLinks_WrappedAddMessage = function(self, text, ...)
-                    if _CL_CanTreatAsString(text) then
-                        -- Reuse the same safety rules as makeClickable:
-                        -- 1) Do not touch existing hyperlinks
-                        -- 2) Only process if it looks like it contains a URL/email/IP
-                        if not _CL_SafeFind(text, "|H", true) then
-                            -- makeClickable returns (false, msg, ...) because it's a filter; we only need the transformed msg.
-                            local ok, _, newText = _CL_SafeCall(makeClickable, self, "ADD_MESSAGE", text, ...)
-                            if ok and newText then
-                                text = newText
-                            end
-                        end
-                    end
-                    local orig = self.__ClickLinks_OrigAddMessage
-                    if orig then
-                        return orig(self, text, ...)
-                    end
-                end
-
-                cf.AddMessage = cf.__ClickLinks_WrappedAddMessage
-            end
-        end
+    if _G.ElvUI ~= nil then return true end
+    local isLoaded = _G.C_AddOns and _G.C_AddOns.IsAddOnLoaded or _G.IsAddOnLoaded
+    if type(isLoaded) == "function" then
+        local ok, loaded = pcall(isLoaded, "ElvUI")
+        if ok and loaded then return true end
     end
+    return false
 end
 
+local _CL_InstalledFrames = setmetatable({}, { __mode = "k" })
+local function _CL_InstallFrameHook(frame)
+    if _CL_IsElvUIActive() or not frame or _CL_InstalledFrames[frame] then return end
+    local original = frame.AddMessage
+    if type(original) ~= "function" then return end
 
--------------------------------------------------
--- Communities / Guild UI message frames (Retail)
--------------------------------------------------
--- notes: The Communities/Guild UI uses its own scrolling message frame and does not always
--- go through CHAT_MSG_* filters or ChatFrame:AddMessage. We hook its AddMessage too.
-
-local function _TryHookMessageFrame(frame)
-    if _CL_IsElvUIActive() then return end
-    if not frame then return end
-    if type(frame.AddMessage) ~= "function" then return end
-
-    -- If another addon/UI code replaces AddMessage later, re-hook safely.
-    if frame.AddMessage == frame.__ClickLinks_WrappedAddMessage then return end
-
-    frame.__ClickLinks_OrigAddMessage = frame.AddMessage
-    frame.__ClickLinks_WrappedAddMessage = function(self, msg, ...)
+    -- Capture the original in this closure, never via a mutable frame field.
+    -- Install once only. If a different addon replaces AddMessage afterwards,
+    -- let that addon own the chain; do not attempt to regain control.
+    local wrapper = function(self, msg, ...)
+        local output = msg
         if _CL_CanTreatAsString(msg) and not _CL_SafeFind(msg, "|H", true) then
-            local ok, _, newMsg = _CL_SafeCall(makeClickable, self, "MESSAGE_FRAME_ADD_MESSAGE", msg, ...)
-            if ok and newMsg then
-                msg = newMsg
+            local ok, changed, converted = pcall(makeClickable, self, "ADD_MESSAGE", msg)
+            if ok and changed == false and type(converted) == "string" then
+                output = converted
             end
         end
-        local orig = self.__ClickLinks_OrigAddMessage
-        if orig then
-            return orig(self, msg, ...)
-        end
+        -- Forward directly to preserve Blizzard's normal message semantics.
+        return original(self, output, ...)
     end
-
-    frame.AddMessage = frame.__ClickLinks_WrappedAddMessage
+    -- Record before assignment so repeat calls never layer wrappers.
+    _CL_InstalledFrames[frame] = true
+    frame.AddMessage = wrapper
 end
 
-HookCommunitiesFramesForClickableURLs = function()
+local function _CL_HookChatFrames()
+    if _CL_IsElvUIActive() then return end
+    for i = 1, (_G.NUM_CHAT_WINDOWS or 0) do
+        _CL_InstallFrameHook(_G["ChatFrame" .. i])
+    end
+end
+
+local function _CL_HookCommunitiesFrames()
+    if _CL_IsElvUIActive() then return end
     local cf = _G.CommunitiesFrame
     if not cf then return end
-
-    local candidates = {}
-    local function addCandidate(frame)
-        if frame then
-            candidates[#candidates + 1] = frame
-        end
-    end
-
-    addCandidate(cf.Chat and cf.Chat.MessageFrame)
-    addCandidate(cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.Chat and cf.Chat.InsetFrame.Chat.MessageFrame)
-    addCandidate(cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.ChatFrame and cf.Chat.InsetFrame.ChatFrame.MessageFrame)
-    addCandidate(cf.ChatFrame and cf.ChatFrame.MessageFrame)
-    addCandidate(cf.ChatFrame)
-
-    for _, f in ipairs(candidates) do
-        _TryHookMessageFrame(f)
-    end
+    local candidates = {
+        cf.Chat and cf.Chat.MessageFrame,
+        cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.Chat and cf.Chat.InsetFrame.Chat.MessageFrame,
+        cf.Chat and cf.Chat.InsetFrame and cf.Chat.InsetFrame.ChatFrame and cf.Chat.InsetFrame.ChatFrame.MessageFrame,
+        cf.ChatFrame and cf.ChatFrame.MessageFrame,
+        cf.ChatFrame,
+    }
+    for _, frame in pairs(candidates) do _CL_InstallFrameHook(frame) end
 end
 
--- Try immediately (addon load), and also after login in case chat frames are not fully built yet.
-HookChatFramesForClickableURLs()
-
--- Re-hook safety: some UI mods replace ChatFrame:AddMessage after login.
--- We do a short-lived ticker after login to re-apply our hooks if needed.
-local __clRehookTicker
-local function _CL_StartRehookTicker()
-    if __clRehookTicker then return end
-    if not (C_Timer and C_Timer.NewTicker) then return end
-    local ticks = 0
-    __clRehookTicker = C_Timer.NewTicker(5, function()
-        ticks = ticks + 1
-        HookChatFramesForClickableURLs()
-        _CL_TryHookCommunitiesFrames()
-        if _G.ClickLinks_EnsureSetItemRefHook then _G.ClickLinks_EnsureSetItemRefHook() end
-        if ticks >= 12 then -- ~60 seconds
-            __clRehookTicker:Cancel()
-            __clRehookTicker = nil
-        end
-    end)
-end
+-- Wait until addons have loaded to correctly detect ElvUI. No periodic
+-- AddMessage re-hooking; this also avoids racing other chat addons at login.
 local __clHookFrame = CreateFrame("Frame")
 __clHookFrame:RegisterEvent("PLAYER_LOGIN")
-__clHookFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 __clHookFrame:RegisterEvent("ADDON_LOADED")
 __clHookFrame:SetScript("OnEvent", function(_, event, addonName)
-    HookChatFramesForClickableURLs()
-	if event == "PLAYER_LOGIN" then _CL_StartRehookTicker() end
-    if _G.ClickLinks_EnsureSetItemRefHook then _G.ClickLinks_EnsureSetItemRefHook() end
-    -- Communities/Guild UI is loaded on-demand on Retail
-    if event == "ADDON_LOADED" then
-        if addonName == "Blizzard_Communities" or addonName == "Blizzard_GuildUI" then
-            _CL_TryHookCommunitiesFrames()
-        end
-    else
-        _CL_TryHookCommunitiesFrames()
+    if event == "PLAYER_LOGIN" then
+        _CL_HookChatFrames()
+        _CL_HookCommunitiesFrames()
+    elseif addonName == "Blizzard_Communities" or addonName == "Blizzard_GuildUI" then
+        _CL_HookCommunitiesFrames()
+    end
+    if _G.ClickLinks_EnsureSetItemRefHook then
+        _G.ClickLinks_EnsureSetItemRefHook()
     end
 end)
 

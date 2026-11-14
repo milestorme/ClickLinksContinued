@@ -1,3 +1,14 @@
+## 2.3.1
+
+### Fixed
+- Improved chat compatibility by preventing repeated `AddMessage` hook installation and potential recursive wrappers with other chat addons.
+- Removed the periodic chat re-hooking cycle to reduce conflicts that could prevent incoming messages from displaying.
+- Improved safety of chat and Communities/Guild message interception while retaining existing ElvUI-specific handling.
+
+### Compatibility
+- Preserved URL conversion, Link Journal, favourites, Wowhead links, and existing ElvUI support.
+- Prioritised reliable chat display when other addons also modify chat functions.
+
 ## 2.3.0
 
 ### Added
