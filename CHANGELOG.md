@@ -1,3 +1,31 @@
+## 2.3.3 (Stable)
+
+### Fixed
+- Convert URLs in plain-text spans of mixed chat messages while preserving existing WoW item/spell hyperlinks unchanged.
+- Leave malformed hyperlinks untouched and retain Retail secret-value guarded processing.
+
+## 2.3.2
+
+### Fixed
+- Validate hostname labels and ports consistently for HTTP(S) and scheme-less URLs.
+- Avoid modifying pipe-escaped input during journal URL normalization.
+- Reconcile journal nextId against existing entry IDs on initialization.
+- Enforce journal capacity after reducing the configured maximum.
+- Add indexed journal ID lookups and clean stale copy-history references.
+- Track actual copy counts for the Copies sort.
+- Ignore malformed non-string entries in trusted/blocked domain maps.
+- Revalidate outgoing shared links before sending.
+- Queue up to 10 incoming shared links instead of overwriting pending links.
+- Reject duplicate pending shares and throttle repeat senders.
+- Validate incoming sharing channels.
+
+### Compatibility
+- Preserve the existing SavedVariables schema (v3), addon-message prefix, and client-specific TOC files.
+- Keep existing chat hyperlink hooks unchanged pending in-game testing.
+
+### Testing
+- Source-level checks only. In-game client compatibility has not been verified.
+
 ## 2.3.1
 
 ### Fixed

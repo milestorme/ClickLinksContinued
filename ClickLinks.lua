@@ -209,10 +209,9 @@ local function makeClickable(self, event, msg, ...)
         return
     end
 
-    -- If the line already contains hyperlinks (items/spells/etc), don't touch it.
-    if _CL_SafeFind(msg, "|H", true) then
-        return
-    end
+    -- Existing WoW hyperlinks must remain byte-for-byte intact.  The URL
+    -- converter may only touch plain-text spans between complete hyperlinks.
+    -- Never inspect a Retail secret value outside the protected pcall below.
 
     -- Quick pre-check to avoid unnecessary gsub.
     -- Bare domains (e.g. google.com) are caught by the dot-containing patterns below;
@@ -228,10 +227,34 @@ local function makeClickable(self, event, msg, ...)
 
     local ok, newMsg = _CL_SafeCall(function(m)
         local gsub = string.gsub
-        for i = 1, #URL_PATTERNS do
-            m = gsub(m, URL_PATTERNS[i], formatURL)
+        local function convertPlain(segment)
+            for i = 1, #URL_PATTERNS do
+                segment = gsub(segment, URL_PATTERNS[i], formatURL)
+            end
+            return segment
         end
-        return m
+
+        -- WoW hyperlink grammar: |Htype:payload|hvisible text|h.
+        -- Keep the entire original sequence untouched (including embedded
+        -- URLs and any surrounding |c... / |r color codes).
+        local parts, pos = {}, 1
+        while true do
+            local linkStart = string.find(m, "|H", pos, true)
+            if not linkStart then
+                parts[#parts + 1] = convertPlain(string.sub(m, pos))
+                break
+            end
+            local firstH = string.find(m, "|h", linkStart + 2, true)
+            local secondH = firstH and string.find(m, "|h", firstH + 2, true)
+            if not secondH then
+                -- Malformed hyperlink: fail closed instead of corrupting it.
+                return m
+            end
+            parts[#parts + 1] = convertPlain(string.sub(m, pos, linkStart - 1))
+            parts[#parts + 1] = string.sub(m, linkStart, secondH + 1)
+            pos = secondH + 2
+        end
+        return table.concat(parts)
     end, msg)
     if ok and type(newMsg) == "string" and newMsg ~= msg then
         return false, newMsg, ...
@@ -767,7 +790,7 @@ f:SetScript("OnEvent", function(_, event, prefix, message, channel, sender)
         end
 
     elseif event == "CHAT_MSG_ADDON" and prefix == "CLKLNK23" then
-        ClickLinks.Sharing.Receive(sender, message)
+        ClickLinks.Sharing.Receive(sender, message, channel)
 
     elseif event == "CHAT_MSG_ADDON" and prefix == PREFIX then
         -- notes: On receiving another player's version, compare and (once) warn if theirs is newer.

@@ -11,9 +11,20 @@ local function hostOf(url)
     local host = authority:match("^([^:]+)") or authority
     return host:lower()
 end
+local function validHost(host)
+    if type(host) ~= "string" or #host == 0 or #host > 253 then return false end
+    if host:find("%.%.", 1, false) or host:sub(1,1) == "." or host:sub(-1) == "." then return false end
+    for label in host:gmatch("[^.]+") do
+        if #label > 63 or not label:match("^[%w][%w%-]*[%w]$") and not label:match("^%w$") then return false end
+    end
+    return true
+end
+local function validPort(port)
+    return port == "" or (tonumber(port) ~= nil and tonumber(port) >= 1 and tonumber(port) <= 65535)
+end
 local function normalise(raw)
     if type(raw) ~= "string" then return nil, "invalid_type" end
-    local ok, value = pcall(function() return trim(raw:gsub("||", "|")) end)
+    local ok, value = pcall(function() return trim(raw) end)
     if not ok then return nil, "protected_value" end
     if #value == 0 or #value > 2048 or value:find("[%c|]") then return nil, "invalid_url" end
     if value:match("^[^%s@]+@[%w%.%-]+%.[%a]+$") then return value:lower() end
@@ -24,15 +35,16 @@ local function normalise(raw)
         local authority, tail = rest:match("^([^/%?#]+)(.*)$")
         if not authority then return nil, "invalid_host" end
         local host, port = authority:match("^([%w%.%-]+):?(%d*)$")
-        if not host then return nil, "invalid_host" end
-        if port ~= "" and (tonumber(port) < 1 or tonumber(port) > 65535) then return nil, "invalid_port" end
+        if not host or not validHost(host) or authority:sub(-1) == ":" then return nil, "invalid_host" end
+        if not validPort(port) then return nil, "invalid_port" end
         if (scheme == "http" and port == "80") or (scheme == "https" and port == "443") then port = "" end
         value = scheme .. "://" .. host:lower() .. (port ~= "" and ":" .. port or "") .. tail
     else
         local authority, tail = value:match("^([^/%?#]+)(.*)$")
         if not authority or not authority:match("^[%w%.%-]+:?%d*$") then return nil, "invalid_host" end
         local h, p = authority:match("^([%w%.%-]+):?(%d*)$")
-        if not h or (not h:find("%.") and not h:match("^%d+%.%d+%.%d+%.%d+$")) then return nil, "invalid_host" end
+        if not h or not validHost(h) or authority:sub(-1) == ":" or not h:find("%.") then return nil, "invalid_host" end
+        if not validPort(p) then return nil, "invalid_port" end
         value = h:lower() .. (p ~= "" and ":" .. p or "") .. tail
     end
     return value
@@ -55,9 +67,13 @@ local function copy(v, seen)
 end
 local function rebuild()
     J.index = {}
+    J.entriesById = {}
     local db = ClickLinksDB
     for i,e in ipairs(db.journal.entries) do
-        if type(e) == "table" and type(e.normalizedUrl) == "string" then J.index[e.normalizedUrl] = i end
+        if type(e) == "table" and type(e.normalizedUrl) == "string" then
+            J.index[e.normalizedUrl] = i
+            if type(e.id) == "number" then J.entriesById[e.id] = e end
+        end
     end
 end
 function J.Initialize()
@@ -101,7 +117,15 @@ function J.Initialize()
     db.settings.captureMode = "clicked"
     db.journal = type(db.journal) == "table" and db.journal or {entries={},nextId=1}
     db.journal.entries = type(db.journal.entries) == "table" and db.journal.entries or {}
-    db.journal.nextId = tonumber(db.journal.nextId) or (#db.journal.entries + 1)
+    local maxId = 0
+    for _, entry in ipairs(db.journal.entries) do
+        if type(entry) == "table" and type(entry.id) == "number" and entry.id > maxId then
+            maxId = entry.id
+        end
+    end
+    local nextId = tonumber(db.journal.nextId)
+    if not nextId or nextId < 1 or nextId <= maxId or nextId % 1 ~= 0 then nextId = maxId + 1 end
+    db.journal.nextId = nextId
     db.copyHistory = type(db.copyHistory) == "table" and db.copyHistory or {}
     db.trustedDomains = type(db.trustedDomains) == "table" and db.trustedDomains or {}
     db.blockedDomains = type(db.blockedDomains) == "table" and db.blockedDomains or {}
@@ -110,7 +134,14 @@ function J.Initialize()
     return true
 end
 function J.Get(id)
-    for _,e in ipairs(ClickLinksDB.journal.entries) do if e.id == id then return e end end
+    return J.entriesById and J.entriesById[id]
+end
+local function cleanHistory()
+    local h = ClickLinksDB.copyHistory
+    if type(h) ~= "table" then return end
+    for i=#h,1,-1 do
+        if not (J.entriesById and J.entriesById[h[i]]) then table.remove(h,i) end
+    end
 end
 local function notify()
     if ClickLinks.UI and ClickLinks.UI.RefreshJournal then ClickLinks.UI.RefreshJournal() end
@@ -127,7 +158,7 @@ function J.Add(url, metadata)
         return existing.id
     end
     local max=math.max(10,math.min(10000,tonumber(db.settings.maxEntries) or 500))
-    if #entries >= max then
+    while #entries >= max do
         local victim
         for i,e in ipairs(entries) do
             if not e.pinned and not e.favorite and (not victim or (e.lastSeen or 0)<(entries[victim].lastSeen or 0)) then victim=i end
@@ -141,7 +172,7 @@ function J.Add(url, metadata)
         category=category(key),firstSeen=now(),lastSeen=now(),seenCount=1,
         favorite=false,pinned=false}
     entries[#entries+1]=e
-    rebuild(); notify()
+    rebuild(); cleanHistory(); notify()
     return id
 end
 function J.SetFavorite(id,enabled)
@@ -154,7 +185,7 @@ function J.SetPinned(id,enabled)
 end
 function J.Delete(id)
     for i,e in ipairs(ClickLinksDB.journal.entries) do
-        if e.id==id then table.remove(ClickLinksDB.journal.entries,i);rebuild();notify();return true end
+        if e.id==id then table.remove(ClickLinksDB.journal.entries,i);rebuild();cleanHistory();notify();return true end
     end
     return nil,"not_found"
 end
@@ -163,11 +194,12 @@ function J.Clear(includeProtected)
     for i=#entries,1,-1 do
         if includeProtected or (not entries[i].favorite and not entries[i].pinned) then table.remove(entries,i) end
     end
-    rebuild();notify();return true
+    rebuild();cleanHistory();notify();return true
 end
 function J.RecordCopy(id)
     local e=J.Get(id); if not e then return nil,"not_found" end
     e.lastCopied=now()
+    e.copyCount=(e.copyCount or 0)+1
     local h=ClickLinksDB.copyHistory
     for i=#h,1,-1 do if h[i]==id then table.remove(h,i) end end
     table.insert(h,1,id)
@@ -204,7 +236,7 @@ function J.Search(filters)
         local av,bv
         if sort=="title" then av=(a.title or a.url):lower();bv=(b.title or b.url):lower()
         elseif sort=="oldest" then av=a.firstSeen or 0;bv=b.firstSeen or 0
-        elseif sort=="copies" then av=a.seenCount or 0;bv=b.seenCount or 0
+        elseif sort=="copies" then av=a.copyCount or 0;bv=b.copyCount or 0
         else av=a.lastSeen or 0;bv=b.lastSeen or 0 end
         if av~=bv then
             if sort=="title" or sort=="oldest" then return av<bv end
