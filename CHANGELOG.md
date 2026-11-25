@@ -1,3 +1,31 @@
+## 2.3.6 (Journal integrity hotfix — one-time repair)
+
+### Fixed
+- Run automatic canonical duplicate repair once per saved journal after ADDON_LOADED; persist the migration flag. Retry initialization at PLAYER_LOGIN only if needed.
+- Keep /cl repair as an explicit recovery command that bypasses the migration flag.
+- Journal opening and ordinary link clicks no longer invoke a full repair. Maintain URL and ID indexes directly on append, rebuild on structural removal, and recover mismatched cached offsets.
+- Preserve the original duplicate merge, flags, counts, timestamps, history remapping, and pre-repair backup.
+- Preserve schema v3, case-sensitive URL paths, journal UI behavior and all chat/MOTD handling.
+- In-game verification of this optimization pending.
+
+## 2.3.5 (Guild MOTD hotfix test)
+
+### Fixed
+- Install chat frame URL hooks before PLAYER_LOGIN when frames already exist; retry at addon load and login only for unhooked frames.
+- Process mixed hyperlinks in direct AddMessage calls using the existing idempotent converter.
+- Register optional MOTD filter names for clients that dispatch them through chat filters.
+- Load after ElvUI when enabled, preserving the existing ElvUI bypass and avoiding repeated wrapping.
+
+### Testing
+- Lua 5.4 syntax checks and simulated chat-frame tests passed; actual WoW login and client compatibility require verification.
+
+## 2.3.4 (Hotfix)
+
+### Fixed
+- Recognize URLs after opening quotes and brackets, including quoted Discord invites in guild MOTDs.
+- Scan original text only to prevent nested generated hyperlinks.
+- Preserve existing item hyperlinks and guarded Retail chat processing.
+
 ## 2.3.3 (Stable)
 
 ### Fixed

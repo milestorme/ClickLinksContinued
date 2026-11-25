@@ -1,6 +1,8 @@
 -- ClickLinks 2.3.0: account-wide journal, no passive capture.
 ClickLinks = ClickLinks or {}
 local J = {}
+local readyDB, readyEntries
+local DUPLICATE_REPAIR_VERSION = 1
 ClickLinks.Journal = J
 local function now() return (type(time) == "function" and time()) or 0 end
 local function trim(s) return s:match("^%s*(.-)%s*$") end
@@ -70,13 +72,88 @@ local function rebuild()
     J.entriesById = {}
     local db = ClickLinksDB
     for i,e in ipairs(db.journal.entries) do
-        if type(e) == "table" and type(e.normalizedUrl) == "string" then
-            J.index[e.normalizedUrl] = i
+        if type(e) == "table" then
+            local key = normalise(e.url)
+            if key and key == e.normalizedUrl then J.index[key] = i end
             if type(e.id) == "number" then J.entriesById[e.id] = e end
         end
     end
 end
-function J.Initialize()
+
+-- Repair old normalization keys and merge only exact canonical URL matches.
+-- Keep the first stored entry's ID and metadata when both entries have values.
+local function repairJournal(db)
+    local journal = db.journal
+    local entries = journal.entries
+    local kept, byKey, remap = {}, {}, {}
+    local changed = false
+    local function beforeChange()
+        if not changed then
+            -- Latest pre-repair snapshot, written only when repair changes data.
+            db.journalRepairBackup = copy({
+                journal=journal, copyHistory=db.copyHistory, time=now()
+            })
+            changed = true
+        end
+    end
+    local function earlier(a,b)
+        a,b=tonumber(a),tonumber(b)
+        if a and b then return math.min(a,b) end
+        return a or b
+    end
+    local function later(a,b)
+        a,b=tonumber(a),tonumber(b)
+        if a and b then return math.max(a,b) end
+        return a or b
+    end
+    for _,e in ipairs(entries) do
+        local key = type(e) == "table" and normalise(e.url)
+        if key and type(e.id) == "number" then
+            local first = byKey[key]
+            if first then
+                beforeChange()
+                if e.id ~= first.id then remap[e.id] = first.id end
+                first.firstSeen=earlier(first.firstSeen,e.firstSeen)
+                first.lastSeen=later(first.lastSeen,e.lastSeen)
+                first.lastCopied=later(first.lastCopied,e.lastCopied)
+                first.seenCount=(tonumber(first.seenCount) or 1)+(tonumber(e.seenCount) or 1)
+                first.copyCount=(tonumber(first.copyCount) or 0)+(tonumber(e.copyCount) or 0)
+                first.favorite=not not (first.favorite or e.favorite)
+                first.pinned=not not (first.pinned or e.pinned)
+                for k,v in pairs(e) do
+                    if first[k] == nil and k ~= "id" then first[k] = v end
+                end
+            else
+                if e.normalizedUrl ~= key then
+                    beforeChange()
+                    e.normalizedUrl = key
+                    e.category = category(key)
+                end
+                byKey[key] = e
+                kept[#kept+1] = e
+            end
+        else
+            -- Leave unrecognized records untouched; do not guess a URL.
+            kept[#kept+1] = e
+        end
+    end
+    if not changed then return false end
+    journal.entries = kept
+    local validIds, seen, history = {}, {}, {}
+    for _,e in ipairs(kept) do
+        if type(e) == "table" and type(e.id) == "number" then validIds[e.id] = true end
+    end
+    for _,id in ipairs(db.copyHistory) do
+        id = remap[id] or id
+        if validIds[id] and not seen[id] then
+            history[#history+1] = id
+            seen[id] = true
+        end
+    end
+    db.copyHistory = history
+    return true
+end
+function J.Initialize(forceRepair)
     ClickLinksDB = type(ClickLinksDB) == "table" and ClickLinksDB or {}
     local db = ClickLinksDB
     if db.schemaVersion ~= nil and db.schemaVersion ~= 3 then return nil, "unsupported_schema" end
@@ -116,7 +193,10 @@ function J.Initialize()
     if db.settings.sharingEnabled == nil then db.settings.sharingEnabled = false end
     db.settings.captureMode = "clicked"
     db.journal = type(db.journal) == "table" and db.journal or {entries={},nextId=1}
-    db.journal.entries = type(db.journal.entries) == "table" and db.journal.entries or {}
+    if type(db.journal.entries) ~= "table" then
+        db.journal.entries = {}
+        db.journal.duplicateRepairVersion = nil
+    end
     local maxId = 0
     for _, entry in ipairs(db.journal.entries) do
         if type(entry) == "table" and type(entry.id) == "number" and entry.id > maxId then
@@ -130,9 +210,33 @@ function J.Initialize()
     db.trustedDomains = type(db.trustedDomains) == "table" and db.trustedDomains or {}
     db.blockedDomains = type(db.blockedDomains) == "table" and db.blockedDomains or {}
     db.minimap = db.minimap or {hide=false,minimapPos=220}
+    local before = #db.journal.entries
+    -- A persistent migration flag avoids repeating the duplicate cleanup on
+    -- reloads. Manual repair deliberately bypasses it.
+    if forceRepair or db.journal.duplicateRepairVersion ~= DUPLICATE_REPAIR_VERSION then
+        repairJournal(db)
+        db.journal.duplicateRepairVersion = DUPLICATE_REPAIR_VERSION
+    end
     rebuild()
-    return true
+    readyDB, readyEntries = db, db.journal.entries
+    return true, nil, before - #db.journal.entries
 end
+
+-- Constant-time readiness check for normal journal use.
+function J.EnsureReady()
+    local db = ClickLinksDB
+    if type(db) == "table" and db == readyDB and db.schemaVersion == 3
+        and type(db.journal) == "table" and db.journal.entries == readyEntries
+        and type(readyEntries) == "table" and J.index and J.entriesById then
+        return true
+    end
+    return J.Initialize()
+end
+
+function J.Repair()
+    return J.Initialize(true)
+end
+
 function J.Get(id)
     return J.entriesById and J.entriesById[id]
 end
@@ -147,17 +251,32 @@ local function notify()
     if ClickLinks.UI and ClickLinks.UI.RefreshJournal then ClickLinks.UI.RefreshJournal() end
 end
 function J.Add(url, metadata)
-    if not J.index then local ok,err=J.Initialize(); if not ok then return nil,err end end
     local key,err = normalise(url); if not key then return nil,err end
+    -- Click-only capture: use the canonical URL index in normal operation.
+    local ok,initErr=J.EnsureReady()
+    if not ok then return nil,initErr end
     local db=ClickLinksDB; local entries=db.journal.entries
-    local existing=J.index[key] and entries[J.index[key]]
+    local slot=J.index[key]
+    local existing=slot and entries[slot]
+    if slot and (not existing or existing.normalizedUrl ~= key) then
+        rebuild()
+        existing=J.index[key] and entries[J.index[key]]
+    end
     if existing then
         existing.seenCount=(existing.seenCount or 1)+1
         existing.lastSeen=now()
         notify()
         return existing.id
     end
-    local max=math.max(10,math.min(10000,tonumber(db.settings.maxEntries) or 500))
+    local max=math.floor(math.max(10,math.min(10000,tonumber(db.settings.maxEntries) or 500)))
+    local needed = #entries - max + 1
+    if needed > 0 then
+        local eligible = 0
+        for _,e in ipairs(entries) do
+            if not e.pinned and not e.favorite then eligible = eligible + 1 end
+        end
+        if eligible < needed then return nil,"journal_full_protected" end
+    end
     while #entries >= max do
         local victim
         for i,e in ipairs(entries) do
@@ -172,7 +291,14 @@ function J.Add(url, metadata)
         category=category(key),firstSeen=now(),lastSeen=now(),seenCount=1,
         favorite=false,pinned=false}
     entries[#entries+1]=e
-    rebuild(); cleanHistory(); notify()
+    if needed > 0 then
+        -- Eviction shifted array offsets.
+        rebuild(); cleanHistory()
+    else
+        J.index[key] = #entries
+        J.entriesById[id] = e
+    end
+    notify()
     return id
 end
 function J.SetFavorite(id,enabled)
@@ -207,15 +333,8 @@ function J.RecordCopy(id)
     notify();return true
 end
 function J.Search(filters)
-    -- SavedVariables may be missing, legacy-shaped, or modified by another addon.
-    -- Reinitialise/migrate before attempting to enumerate the entries.
-    if type(ClickLinksDB) ~= "table"
-        or type(ClickLinksDB.journal) ~= "table"
-        or type(ClickLinksDB.journal.entries) ~= "table" then
-        local ok, err = J.Initialize()
-        if not ok then
-            return {} -- Never crash the UI for an unsupported database.
-        end
+    if not J.EnsureReady() then
+        return {} -- Never crash the UI for an unsupported database.
     end
     filters=filters or {}
     local query=tostring(filters.query or ""):lower()

@@ -43,33 +43,24 @@ local L = LibStub("AceLocale-3.0"):GetLocale("ClickLinks")
 local URL_PATTERNS = {
     -- X://Y most urls
     "^(%a[%w+.-]+://[^%s|]+)",
-    "%f[%S](%a[%w+.-]+://[^%s|]+)",
     -- www.X.Y domain and path
     "^(www%.[-%w_%%]+%.(%a%a+)/[^%s|]+)",
-    "%f[%S](www%.[-%w_%%]+%.(%a%a+)/[^%s|]+)",
     -- www.X.Y domain
     "^(www%.[-%w_%%]+%.(%a%a+))",
-    "%f[%S](www%.[-%w_%%]+%.(%a%a+))",
     -- domain.tld/path (no scheme/www)
     "^(%w[%w%._-]+%.(%a%a+)/[^%s|]+)",
-    "%f[%S](%w[%w%._-]+%.(%a%a+)/[^%s|]+)",
     -- domain.tld (no scheme/www)
     "^(%w[%w%._-]+%.(%a%a+))",
-    "%f[%S](%w[%w%._-]+%.(%a%a+))",
     -- email
-    "(%S+@[%w_.-%%]+%.(%a%a+))",
+    "^(%S+@[%w_.-%%]+%.(%a%a+))",
     -- ip address with port and path
     "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d/[^%s|]+)",
-    "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d/[^%s|]+)",
     -- ip address with port
     "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d)%f[%D]",
-    "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d:[0-6]?%d?%d?%d?%d)%f[%D]",
     -- ip address with path
     "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%/[^%s|]+)",
-    "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%/[^%s|]+)",
     -- ip address
     "^([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d)%f[%D]",
-    "%f[%S]([0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d%.[0-2]?%d?%d)%f[%D]"
 }
 
 -- Characters commonly appended after URLs that should not be clickable
@@ -226,12 +217,53 @@ local function makeClickable(self, event, msg, ...)
     end
 
     local ok, newMsg = _CL_SafeCall(function(m)
-        local gsub = string.gsub
+        -- Scan original text only; never feed generated hyperlinks back into
+        -- the URL patterns. Opening punctuation is a valid token boundary.
         local function convertPlain(segment)
-            for i = 1, #URL_PATTERNS do
-                segment = gsub(segment, URL_PATTERNS[i], formatURL)
+            local out, pos, plainStart = {}, 1, 1
+            local boundary = true
+            while pos <= #segment do
+                local ch = segment:sub(pos, pos)
+                local color = segment:sub(pos, pos + 9)
+                if color:match("^|c%x%x%x%x%x%x%x%x$") then
+                    pos = pos + 10
+                    boundary = true
+                elseif segment:sub(pos, pos + 1) == "|r" then
+                    pos = pos + 2
+                    boundary = true
+                elseif segment:sub(pos, pos + 1) == "||" then
+                    pos = pos + 2
+                    boundary = false
+                else
+                    local matched
+                    if boundary and ch:match("[%w]") then
+                        local rest = segment:sub(pos)
+                        for i = 1, #URL_PATTERNS do
+                            local first, last, url = rest:find(URL_PATTERNS[i])
+                            if first == 1 then
+                                local formatted = formatURL(url)
+                                if formatted ~= url then
+                                    out[#out + 1] = segment:sub(plainStart, pos - 1)
+                                    out[#out + 1] = formatted
+                                    pos = pos + last
+                                    plainStart = pos
+                                    boundary = URL_TRAILING[url:sub(-1)] == true
+                                    matched = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    if not matched then
+                        boundary = ch:match("%s") ~= nil
+                            or ch == '"' or ch == "'" or ch == "("
+                            or ch == "[" or ch == "{"
+                        pos = pos + 1
+                    end
+                end
             end
-            return segment
+            out[#out + 1] = segment:sub(plainStart)
+            return table.concat(out)
         end
 
         -- WoW hyperlink grammar: |Htype:payload|hvisible text|h.
@@ -302,6 +334,10 @@ local function _CL_RegisterAllChatFilters()
         local ev = "CHAT_MSG_" .. suffix
         pcall(ChatFrame_AddMessageEventFilter, ev, makeClickable)
     end
+    -- Some clients expose MOTD as GUILD_MOTD, not an ordinary chat message.
+    -- The direct AddMessage hook below covers clients that bypass filters.
+    pcall(ChatFrame_AddMessageEventFilter, "GUILD_MOTD", makeClickable)
+    pcall(ChatFrame_AddMessageEventFilter, "CHAT_MSG_GUILD_MOTD", makeClickable)
 end
 
 _CL_RegisterAllChatFilters()
@@ -340,7 +376,8 @@ local function _CL_InstallFrameHook(frame)
     -- let that addon own the chain; do not attempt to regain control.
     local wrapper = function(self, msg, ...)
         local output = msg
-        if _CL_CanTreatAsString(msg) and not _CL_SafeFind(msg, "|H", true) then
+        -- The converter already preserves complete hyperlinks and is idempotent.
+        if _CL_CanTreatAsString(msg) then
             local ok, changed, converted = pcall(makeClickable, self, "ADD_MESSAGE", msg)
             if ok and changed == false and type(converted) == "string" then
                 output = converted
@@ -356,6 +393,9 @@ end
 
 local function _CL_HookChatFrames()
     if _CL_IsElvUIActive() then return end
+    -- The default frame may exist before NUM_CHAT_WINDOWS is initialized.
+    _CL_InstallFrameHook(_G.DEFAULT_CHAT_FRAME)
+    _CL_InstallFrameHook(_G.ChatFrame1)
     for i = 1, (_G.NUM_CHAT_WINDOWS or 0) do
         _CL_InstallFrameHook(_G["ChatFrame" .. i])
     end
@@ -375,8 +415,9 @@ local function _CL_HookCommunitiesFrames()
     for _, frame in pairs(candidates) do _CL_InstallFrameHook(frame) end
 end
 
--- Wait until addons have loaded to correctly detect ElvUI. No periodic
--- AddMessage re-hooking; this also avoids racing other chat addons at login.
+-- ElvUI is an optional TOC dependency so its loaded state is known before
+-- installing early hooks. Guild MOTD can be displayed before PLAYER_LOGIN.
+-- Install only once per frame; never re-wrap a replacement from another addon.
 local __clHookFrame = CreateFrame("Frame")
 __clHookFrame:RegisterEvent("PLAYER_LOGIN")
 __clHookFrame:RegisterEvent("ADDON_LOADED")
@@ -384,6 +425,8 @@ __clHookFrame:SetScript("OnEvent", function(_, event, addonName)
     if event == "PLAYER_LOGIN" then
         _CL_HookChatFrames()
         _CL_HookCommunitiesFrames()
+    elseif addonName == ADDON_NAME then
+        _CL_HookChatFrames()
     elseif addonName == "Blizzard_Communities" or addonName == "Blizzard_GuildUI" then
         _CL_HookCommunitiesFrames()
     end
@@ -391,6 +434,10 @@ __clHookFrame:SetScript("OnEvent", function(_, event, addonName)
         _G.ClickLinks_EnsureSetItemRefHook()
     end
 end)
+
+-- Install immediately for login announcements; retry only for frames that
+-- did not exist yet at our ADDON_LOADED or PLAYER_LOGIN events.
+_CL_HookChatFrames()
 
 -------------------------------------------------
 -- Copy popup
@@ -622,10 +669,13 @@ end
 local PREFIX = "CLICKLINKS_VER"
 
 -- notes: SavedVariables: stores a one-time warning flag so users don't get spammed repeatedly.
-ClickLinksDB = ClickLinksDB or { warned = false }
-local _journalReady, _journalError = ClickLinks.Journal.Initialize()
-if not _journalReady then
-    print( "ClickLinks: "..L["JOURNAL_SCHEMA_ERROR"].." " .. tostring(_journalError))
+-- SavedVariables are guaranteed available at our ADDON_LOADED event.
+local _journalReady, _journalError
+local function _InitializeJournal()
+    _journalReady, _journalError = ClickLinks.Journal.Initialize()
+    if not _journalReady then
+        print("ClickLinks: "..L["JOURNAL_SCHEMA_ERROR"].." "..tostring(_journalError))
+    end
 end
 _AddToJournal = function(url)
     if not _journalReady then return end
@@ -744,6 +794,7 @@ end
 
 local f = CreateFrame("Frame")
 -- notes: PLAYER_LOGIN = initial broadcast; GROUP_ROSTER_UPDATE = broadcast when joining a group; CHAT_MSG_ADDON = receive versions.
+f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("CHAT_MSG_ADDON")
 f:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -773,7 +824,11 @@ end
 
 f:SetScript("OnEvent", function(_, event, prefix, message, channel, sender)
     -- notes: Central event router for version system.
-    if event == "PLAYER_LOGIN" then
+    if event == "ADDON_LOADED" then
+        if prefix == ADDON_NAME then _InitializeJournal() end
+    elseif event == "PLAYER_LOGIN" then
+        -- Retry only if ADDON_LOADED did not initialize the journal.
+        if not _journalReady then _InitializeJournal() end
         -- notes: On login, announce version to guild and current group (if any).
         SendVersionToGroup()
         _InitMinimap()
@@ -821,6 +876,17 @@ SlashCmdList["CLICKLINKS"] = function(msg)
 
     elseif msg == "journal" or msg == "log" then
         ToggleJournal()
+
+    elseif msg == "repair" then
+        local ok,err,removed = ClickLinks.Journal.Repair()
+        if ok then
+            _journalReady, _journalError = true, nil
+            print("ClickLinks "..localVersion..": journal repair removed "..removed..
+                " duplicate entries; "..#ClickLinksDB.journal.entries.." links remain.")
+            ClickLinks.UI.RefreshJournal()
+        else
+            print("ClickLinks: journal repair failed ("..tostring(err)..")")
+        end
 
     elseif msg == "accept" then
         local id,err = ClickLinks.Sharing.Accept()

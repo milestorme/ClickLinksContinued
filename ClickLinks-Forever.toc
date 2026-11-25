@@ -3,7 +3,8 @@
 ## Original Author: tannerng
 ## Continued by: Milestorme
 ## Notes: Makes URLs clickable
-## Version: 2.3.3
+## Version: 2.3.6
+## OptionalDeps: ElvUI
 ## SavedVariables: ClickLinksDB
 ## Category: Chat
 ## IconTexture: Interface/AddOns/ClickLinks/ClickLinks.tga

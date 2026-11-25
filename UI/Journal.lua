@@ -157,6 +157,8 @@ local function makeUI()
     frame:Hide()
 end
 function UI.OpenJournal()
+    local ok = ClickLinks.Journal.EnsureReady()
+    if not ok then return end
     makeUI();frame:Show();UI.RefreshJournal()
 end
 function UI.ToggleJournal()
